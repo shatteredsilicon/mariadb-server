@@ -78,7 +78,6 @@
 #define DH_set0_pqg(D,P,Q,G)            ((D)->p= (P), (D)->g= (G))
 #endif
 
-#define EVP_CIPHER_CTX_buf_noconst(ctx) ((ctx)->buf)
 #define EVP_CIPHER_CTX_encrypting(ctx)  ((ctx)->encrypt)
 #define EVP_CIPHER_CTX_SIZE             sizeof(EVP_CIPHER_CTX)
 
