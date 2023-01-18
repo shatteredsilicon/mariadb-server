@@ -1602,7 +1602,8 @@ dict_table_rename_in_cache(
 			foreign->heap, table->name.m_name);
 		foreign->foreign_table_name_lookup_set();
 
-		if (strchr(foreign->id, '/')) {
+		const bool tmp_id = (strchr(foreign->id, '\xFF') != NULL);
+		if (!tmp_id && strchr(foreign->id, '/')) {
 			/* This is a >= 4.0.18 format id */
 
 			ulint	db_len;
@@ -1746,10 +1747,17 @@ dict_table_rename_in_cache(
 		}
 
 		table->foreign_set.erase(it);
-		fk_set.insert(foreign);
 
-		if (foreign->referenced_table) {
-			foreign->referenced_table->referenced_set.insert(foreign);
+		if (!tmp_id) {
+			fk_set.insert(foreign);
+
+			if (foreign->referenced_table) {
+				foreign->referenced_table
+					->referenced_set.insert(foreign);
+			}
+		} else {
+			/* foreign was not added to cache, free it */
+			dict_foreign_free(foreign);
 		}
 	}
 
