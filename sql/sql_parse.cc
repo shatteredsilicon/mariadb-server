@@ -3869,6 +3869,9 @@ mysql_execute_command(THD *thd, bool is_called_from_prepared_stmt)
   }
 #endif /* WITH_WSREP */
 
+  if (thd->locked_tables_mode)
+    thd->locked_tables_list.start_command();
+
   switch (lex->sql_command) {
 
   case SQLCOM_SHOW_EVENTS:
@@ -7403,9 +7406,11 @@ void THD::reset_for_next_command(bool do_clear_error)
   DBUG_ENTER("THD::reset_for_next_command");
   DBUG_ASSERT(!spcont); /* not for substatements of routines */
   DBUG_ASSERT(!in_sub_stmt);
+  DBUG_ASSERT(transaction->on);
+
   /*
     Table maps should have been reset after previous statement except in the
-    case where we have locked tables
+    case where we have locked ables
   */
   DBUG_ASSERT(binlog_table_maps == 0 ||
               locked_tables_mode == LTM_LOCK_TABLES);

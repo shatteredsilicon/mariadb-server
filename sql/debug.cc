@@ -16,6 +16,7 @@
 #include "mariadb.h"
 #include "sql_class.h"
 #include "debug.h"
+#include <mysql/service_debug_sync.h>
 
 /**
    Debug utility to do crash after a set number of executions
@@ -51,6 +52,11 @@ void debug_crash_here(const char *keyword)
 {
   DBUG_ENTER("debug_crash_here");
   DBUG_PRINT("enter", ("keyword: %s", keyword));
+
+#ifdef ENABLED_DEBUG_SYNC
+  if (debug_sync_service)
+    debug_sync_service(current_thd, keyword, strlen(keyword));
+#endif
 
   DBUG_EXECUTE_IF(keyword,
                   if (debug_decrement_counter(&debug_crash_counter))

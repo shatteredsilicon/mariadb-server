@@ -61,12 +61,14 @@ Created 9/17/2000 Heikki Tuuri
 #include "srv0mon.h"
 #include "srv0start.h"
 #include "log.h"
+#include "sql_funcs.h"
 
 #include <algorithm>
 #include <vector>
 #include <thread>
 
 
+/*===========================*/
 /** Delay an INSERT, DELETE or UPDATE operation if the purge is lagging. */
 static void row_mysql_delay_if_needed()
 {
@@ -2703,73 +2705,16 @@ row_rename_table_for_mysql(
 		}
 
 		pars_info_add_str_literal(info, "new_table_utf8", new_table_name);
+		/* Old foreign ID for temporary constraint was written like this:
+			db_name/\xFFconstraint_name */
+		pars_info_add_int4_literal(info, "old_is_tmp",
+					   (fk == RENAME_FK) && old_is_tmp);
+		/* New foreign ID for temporary constraint is written like this:
+			db_name/\xFF\xFFconstraint_name */
+		pars_info_add_int4_literal(info, "new_is_tmp",
+					   (fk == RENAME_FK) && new_is_tmp);
 
-		err = que_eval_sql(
-			info,
-			"PROCEDURE RENAME_CONSTRAINT_IDS () IS\n"
-			"gen_constr_prefix CHAR;\n"
-			"new_db_name CHAR;\n"
-			"foreign_id CHAR;\n"
-			"new_foreign_id CHAR;\n"
-			"old_db_name_len INT;\n"
-			"old_t_name_len INT;\n"
-			"new_db_name_len INT;\n"
-			"id_len INT;\n"
-			"offset INT;\n"
-			"found INT;\n"
-			"BEGIN\n"
-			"found := 1;\n"
-			"old_db_name_len := INSTR(:old_table_name, '/')-1;\n"
-			"new_db_name_len := INSTR(:new_table_name, '/')-1;\n"
-			"new_db_name := SUBSTR(:new_table_name, 0,\n"
-			"                      new_db_name_len);\n"
-			"old_t_name_len := LENGTH(:old_table_name);\n"
-			"gen_constr_prefix := CONCAT(:old_table_name_utf8,\n"
-			"                            '_ibfk_');\n"
-			"WHILE found = 1 LOOP\n"
-			"       SELECT ID INTO foreign_id\n"
-			"        FROM SYS_FOREIGN\n"
-			"        WHERE FOR_NAME = :old_table_name\n"
-			"         AND TO_BINARY(FOR_NAME)\n"
-			"           = TO_BINARY(:old_table_name)\n"
-			"         LOCK IN SHARE MODE;\n"
-			"       IF (SQL % NOTFOUND) THEN\n"
-			"        found := 0;\n"
-			"       ELSE\n"
-			"        UPDATE SYS_FOREIGN\n"
-			"        SET FOR_NAME = :new_table_name\n"
-			"         WHERE ID = foreign_id;\n"
-			"        id_len := LENGTH(foreign_id);\n"
-			"        IF (INSTR(foreign_id, '/') > 0) THEN\n"
-			"               IF (INSTR(foreign_id,\n"
-			"                         gen_constr_prefix) > 0)\n"
-			"               THEN\n"
-                        "                offset := INSTR(foreign_id, '_ibfk_') - 1;\n"
-			"                new_foreign_id :=\n"
-			"                CONCAT(:new_table_utf8,\n"
-			"                SUBSTR(foreign_id, offset,\n"
-			"                       id_len - offset));\n"
-			"               ELSE\n"
-			"                new_foreign_id :=\n"
-			"                CONCAT(new_db_name,\n"
-			"                SUBSTR(foreign_id,\n"
-			"                       old_db_name_len,\n"
-			"                       id_len - old_db_name_len));\n"
-			"               END IF;\n"
-			"               UPDATE SYS_FOREIGN\n"
-			"                SET ID = new_foreign_id\n"
-			"                WHERE ID = foreign_id;\n"
-			"               UPDATE SYS_FOREIGN_COLS\n"
-			"                SET ID = new_foreign_id\n"
-			"                WHERE ID = foreign_id;\n"
-			"        END IF;\n"
-			"       END IF;\n"
-			"END LOOP;\n"
-			"UPDATE SYS_FOREIGN SET REF_NAME = :new_table_name\n"
-			"WHERE REF_NAME = :old_table_name\n"
-			"  AND TO_BINARY(REF_NAME)\n"
-			"    = TO_BINARY(:old_table_name);\n"
-			"END;\n", trx);
+		err = que_eval_sql(info, rename_constraint_ids, trx);
 
 	} else if (n_constraints_to_drop > 0) {
 		/* Drop some constraints of tmp tables. */
@@ -2830,39 +2775,47 @@ row_rename_table_for_mysql(
 		an ALTER TABLE, not in a RENAME. */
 		dict_names_t	fk_tables;
 
-		err = dict_load_foreigns(
-			new_name, nullptr, trx->id,
-			!old_is_tmp || trx->check_foreigns,
-			fk == RENAME_FK || fk == RENAME_ALTER_COPY
-			? DICT_ERR_IGNORE_NONE
-			: DICT_ERR_IGNORE_FK_NOKEY,
-			fk_tables);
+		if (!(new_is_tmp && fk == RENAME_FK)) {
+			err = dict_load_foreigns(
+				new_name, nullptr, trx->id,
+				!old_is_tmp || trx->check_foreigns,
+				fk == RENAME_FK || fk == RENAME_ALTER_COPY
+				? DICT_ERR_IGNORE_NONE
+				: DICT_ERR_IGNORE_FK_NOKEY,
+				fk_tables);
 
-		if (err != DB_SUCCESS) {
-			if (old_is_tmp) {
-				/* In case of copy alter, ignore the
-				loading of foreign key constraint
-				when foreign_key_check is disabled */
-				ib::error_or_warn(trx->check_foreigns)
+			if (err != DB_SUCCESS) {
+				if (old_is_tmp && fk == RENAME_FK &&
+				    !trx->check_foreigns) {
+					/* Reverting atomic C-O-R from backup,
+					don't warn anything here. */
+					err = DB_SUCCESS;
+					break;
+				} else if (old_is_tmp) {
+					/* In case of copy alter, ignore the
+					loading of foreign key constraint
+					when foreign_key_check is disabled */
+					ib::error_or_warn(trx->check_foreigns)
 					<< "In ALTER TABLE "
 					<< ut_get_name(trx, new_name)
 					<< " has or is referenced in foreign"
 					" key constraints which are not"
 					" compatible with the new table"
 					" definition.";
-				if (!trx->check_foreigns) {
-					err = DB_SUCCESS;
-					break;
-				}
-			} else {
-				ib::error() << "In RENAME TABLE table "
+					if (!trx->check_foreigns) {
+						err = DB_SUCCESS;
+						break;
+					}
+				} else {
+					ib::error() << "In RENAME TABLE table "
 					<< ut_get_name(trx, new_name)
 					<< " is referenced in foreign key"
 					" constraints which are not compatible"
 					" with the new table definition.";
-			}
+				}
 
-			goto rollback_and_exit;
+				goto rollback_and_exit;
+			}
 		}
 
 		/* Check whether virtual column or stored column affects

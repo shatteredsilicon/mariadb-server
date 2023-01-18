@@ -5430,7 +5430,7 @@ void handler::mark_trx_read_write_internal()
       table_share can be NULL, for example, in ha_delete_table() or
       ha_rename_table().
     */
-    if (table_share == NULL || table_share->tmp_table == NO_TMP_TABLE)
+    if (table_share == NULL || table_share->tmp_table <= NO_TMP_TABLE)
       ha_info->set_trx_read_write();
   }
 }
@@ -5472,6 +5472,11 @@ int handler::ha_end_bulk_insert()
   DBUG_ENTER("handler::ha_end_bulk_insert");
   DBUG_EXECUTE_IF("crash_end_bulk_insert",
                   { extra(HA_EXTRA_FLUSH) ; DBUG_SUICIDE();});
+  if (DBUG_IF("ha_end_bulk_insert_fail"))
+  {
+    my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    DBUG_RETURN(HA_ERR_OUT_OF_MEM);
+  }
   estimation_rows_to_insert= 0;
   DBUG_RETURN(end_bulk_insert());
 }
@@ -7568,8 +7573,7 @@ static int binlog_log_row_to_binlog(TABLE* table,
 
   DBUG_ENTER("binlog_log_row_to_binlog");
 
-  if (!thd->binlog_table_maps &&
-      thd->binlog_write_table_maps())
+  if (!thd->binlog_table_maps && thd->binlog_write_table_maps(table))
     DBUG_RETURN(HA_ERR_RBR_LOGGING_FAILED);
 
   DBUG_ASSERT(thd->is_current_stmt_binlog_format_row());
@@ -8190,7 +8194,7 @@ int handler::ha_write_row(const uchar *buf)
     error= binlog_log_row(0, buf, log_func);
 
 #ifdef WITH_WSREP
-    if (WSREP_NNULL(ha_thd()) && table_share->tmp_table == NO_TMP_TABLE &&
+    if (WSREP_NNULL(ha_thd()) && table_share->tmp_table <= NO_TMP_TABLE &&
         ht->flags & HTON_WSREP_REPLICATION &&
         !error && (error= wsrep_after_row(ha_thd())))
     {
@@ -8255,7 +8259,7 @@ int handler::ha_update_row(const uchar *old_data, const uchar *new_data)
                       " can not mark as PA unsafe");
       }
 
-      if (!error && table_share->tmp_table == NO_TMP_TABLE &&
+      if (!error && table_share->tmp_table <= NO_TMP_TABLE &&
           ht->flags & HTON_WSREP_REPLICATION)
         error= wsrep_after_row(thd);
     }
@@ -8333,7 +8337,7 @@ int handler::ha_delete_row(const uchar *buf)
                       " can not mark as PA unsafe");
       }
 
-      if (!error && table_share->tmp_table == NO_TMP_TABLE &&
+      if (!error && table_share->tmp_table <= NO_TMP_TABLE &&
           ht->flags & HTON_WSREP_REPLICATION)
         error= wsrep_after_row(thd);
     }
@@ -9357,4 +9361,30 @@ void handler::set_optimizer_costs(THD *thd)
 {
   optimizer_where_cost=      thd->variables.optimizer_where_cost;
   optimizer_scan_setup_cost= thd->variables.optimizer_scan_setup_cost;
+}
+
+/**
+  @brief Check whether existing table complies with atomic C-O-R requirements
+
+  @return       true means atomic C-O-R is allowed for existing table.
+  @retval true  Table either not exists or non-view and doesn't have expensive
+                rename flag.
+  @retval false Table exists and either view or has expensive rename flag.
+*/
+
+bool HA_CREATE_INFO::
+atomic_replace_check_existing(THD *thd, const LEX_CSTRING *db,
+                              const LEX_CSTRING *table_name) const
+{
+  handlerton *db_type= NULL;
+  LEX_CUSTRING org_tabledef_version;
+  DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE, db->str,
+                                             table_name->str,
+                                             MDL_SHARED_NO_READ_WRITE));
+  if (!ha_table_exists(thd, db, table_name, &org_tabledef_version, &db_type))
+    return true;
+  if (db_type == view_pseudo_hton ||
+      db_type->flags & HTON_EXPENSIVE_RENAME)
+    return false;
+  return true;
 }

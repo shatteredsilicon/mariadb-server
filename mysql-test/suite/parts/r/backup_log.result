@@ -99,19 +99,18 @@ ERROR 23000: Duplicate entry '1' for key 'PRIMARY'
 create table t32 (a int) PARTITION BY HASH(a) PARTITIONS 2;
 drop table if exists t30,t31,t32,tmp_t30;
 Warnings:
-Note	1051	Unknown table 'test.t31,test.tmp_t30'
+Note	1051	Unknown table 'test.tmp_t30'
 #
 # Reading backup ddl log file
 #
 CREATE,MyISAM,1,test,t30,id: 1,,0,,,
 CREATE,MyISAM,1,test,t31,id: 2,,0,,,
-DROP,MyISAM,1,test,t31,id: 2,,0,,,
+DROP,partition,0,test,t31,id: 2,,0,,,
 CREATE,MyISAM,0,test,t31,id: 3,,0,,,
-DROP,MyISAM,0,test,t31,id: 3,,0,,,
-DROP_AFTER_CREATE,MyISAM,1,test,t31,id: 4,,0,,,
-CREATE,MyISAM,1,test,t32,id: 5,,0,,,
+CREATE,MyISAM,1,test,t32,id: 4,,0,,,
 DROP,MyISAM,1,test,t30,id: 1,,0,,,
-DROP,MyISAM,1,test,t32,id: 5,,0,,,
+DROP,MyISAM,1,test,t31,id: 3,,0,,,
+DROP,MyISAM,1,test,t32,id: 4,,0,,,
 #
 # Testing create LIKE
 #
@@ -134,7 +133,7 @@ drop table t40, t41, t42;
 CREATE,MyISAM,1,test,t40,id: 1,,0,,,
 CREATE,InnoDB,1,test,t41,id: 2,,0,,,
 CREATE,partition,0,test,t42,id: 3,,0,,,
-DROP,MyISAM,1,test,t42,id: 3,,0,,,
+DROP,partition,0,test,t42,id: 3,,0,,,
 CREATE,partition,0,test,t42,id: 4,,0,,,
 DROP,MyISAM,1,test,t40,id: 1,,0,,,
 DROP,InnoDB,1,test,t41,id: 2,,0,,,

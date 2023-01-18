@@ -1,8 +1,8 @@
-#ifndef STRUCTS_INCLUDED
+ #ifndef STRUCTS_INCLUDED
 #define STRUCTS_INCLUDED
 
 /* Copyright (c) 2000, 2010, Oracle and/or its affiliates.
-   Copyright (c) 2009, 2019, MariaDB Corporation.
+   Copyright (c) 2009, 2022, MariaDB Corporation.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -584,10 +584,9 @@ private:
   Options m_options;
 
 public:
-  Options create_like_options() const
+  Options get_options() const
   {
-    return (DDL_options_st::Options)
-           (((uint) m_options) & (OPT_IF_NOT_EXISTS | OPT_OR_REPLACE));
+    return m_options;
   }
   void init() { m_options= OPT_NONE; }
   void init(Options options) { m_options= options; }
@@ -1108,5 +1107,9 @@ struct Table_name
   Lex_ident_db    db;
   Lex_ident_table table_name;
   Lex_ident_table alias;
+  bool is_set() const
+  {
+    return table_name.str;
+  }
 };
 #endif /* STRUCTS_INCLUDED */

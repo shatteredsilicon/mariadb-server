@@ -3,7 +3,7 @@
 
 /*
    Copyright (c) 2004, 2011, Oracle and/or its affiliates.
-   Copyright (c) 2017, MariaDB Corporation.
+   Copyright (c) 2017, 2022, MariaDB Corporation.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -91,10 +91,14 @@ public:
   TABLE table;
   bool upgrading50to51;
   bool got_error;
+  int rename_flags;
+  bool lock_triggers;
 
   TRIGGER_RENAME_PARAM()
   {
     upgrading50to51= got_error= 0;
+    rename_flags= 0;
+    lock_triggers= false;
     table.reset();
   }
   ~TRIGGER_RENAME_PARAM()
@@ -148,6 +152,7 @@ public:
   bool change_on_table_name(void* param_arg);
   bool change_table_name(void* param_arg);
   bool add_to_file_list(void* param_arg);
+  bool lock_trigger(void* param);
 };
 
 typedef bool (Trigger::*Triggers_processor)(void *arg);
@@ -251,12 +256,14 @@ public:
                         bool old_row_is_record1);
   void empty_lists();
   bool create_lists_needed_for_files(MEM_ROOT *root);
-  bool save_trigger_file(THD *thd, const LEX_CSTRING *db, const LEX_CSTRING *table_name);
+  bool save_trigger_file(THD *thd, const LEX_CSTRING *db,
+                         const LEX_CSTRING *table_name, uint flags);
 
   static bool check_n_load(THD *thd, const LEX_CSTRING *db, const LEX_CSTRING *table_name,
-                           TABLE *table, bool names_only);
+                           TABLE *table, bool names_only, uint flags);
   static bool drop_all_triggers(THD *thd, const LEX_CSTRING *db,
-                                const LEX_CSTRING *table_name, myf MyFlags);
+                                const LEX_CSTRING *table_name, uint flags,
+                                myf MyFlags);
   static bool prepare_for_rename(THD *thd, TRIGGER_RENAME_PARAM *param,
                                  const Lex_ident_db &db,
                                  const Lex_ident_table &old_alias,
@@ -319,6 +326,11 @@ public:
 
   Trigger* for_all_triggers(Triggers_processor func, void *arg);
 
+  bool lock_triggers(THD *thd)
+  {
+    return (bool) for_all_triggers(&Trigger::lock_trigger, (void *) thd);
+  }
+
 private:
   bool prepare_record_accessors(TABLE *table);
   Trigger *change_table_name_in_trignames(const LEX_CSTRING *old_db_name,
@@ -329,7 +341,8 @@ private:
                                      const LEX_CSTRING *old_db_name,
                                      const LEX_CSTRING *new_db_name,
                                      const LEX_CSTRING *old_table_name,
-                                     const LEX_CSTRING *new_table_name);
+                                     const LEX_CSTRING *new_table_name,
+                                     uint flags);
 
   bool check_for_broken_triggers() 
   {

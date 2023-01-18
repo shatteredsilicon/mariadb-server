@@ -1,5 +1,8 @@
 --source include/have_s3.inc
 --source include/have_sequence.inc
+--source include/have_partition.inc
+--source include/have_debug.inc
+--source include/have_innodb.inc
 
 #
 # Create unique database for running the tests
@@ -31,4 +34,50 @@ select count(*) from t1;
 drop table t1;
 --source include/search_pattern_in_file.inc
 
+# partition_create_fail.test
+SET @saved_dbug = @@debug_dbug;
+
+# Test failure in create of partition table
+
+CREATE TABLE p0 (
+  c1 int primary key,
+  c2 int DEFAULT NULL
+) ENGINE=InnoDB;
+insert into p0 select seq,seq from seq_1_to_10;
+
+SET debug_dbug='+d,failed_create_partitioning_metadata';
+
+--error 1041
+alter table p0 engine=s3
+  PARTITION BY RANGE (c1)
+(PARTITION p0 VALUES LESS THAN (100));
+
+SET debug_dbug=@saved_dbug;
+
+drop table p0;
+
+# If something went wrong, then we have a copy of the .frm file in S3 and
+# the following drop table will not fail
+
+--replace_result $database s3
+--error ER_BAD_TABLE_ERROR
+drop table p0;
+
+create table t1 (a int);
+create table t2 (b int);
+alter table t1 engine=s3;
+set @debug_crash_counter= 1;
+set @@debug_dbug= '+d,ddl_log_create_before_install_new';
+--echo # No crash means atomic C-O-R is not used
+create or replace table t1 (b int);
+alter table t1 engine=s3;
+create or replace table t1 like t2;
+alter table t1 engine=s3;
+create or replace table t1 select * from t2;
+set @@debug_dbug= @saved_dbug;
+drop tables t1, t2;
+
+#
+# clean up
+#
 --source drop_database.inc

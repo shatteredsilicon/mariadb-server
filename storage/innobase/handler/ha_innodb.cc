@@ -12254,6 +12254,7 @@ create_table_info_t::create_foreign_keys()
 	if (sqlcom == SQLCOM_ALTER_TABLE) {
 		dict_table_t* alter_table;
 		mem_heap_t* heap = mem_heap_create(10000);
+		DBUG_ASSERT(!m_create_info->is_atomic_replace());
 		LEX_CSTRING table_name = m_form->s->table_name;
 		CHARSET_INFO* to_cs = &my_charset_filename;
 
@@ -12468,6 +12469,7 @@ create_table_info_t::create_foreign_key(
 
 		if (fk->constraint_name.str) {
 			ulint db_len;
+			const bool tmp= m_create_info->is_atomic_replace();
 
 			/* Catenate 'databasename/' to the constraint name
 			specified by the user: we conceive the constraint as
@@ -12477,13 +12479,17 @@ create_table_info_t::create_foreign_key(
 			db_len = dict_get_db_name_len(table->name.m_name);
 
 			foreign->id = static_cast<char*>(mem_heap_alloc(
-				foreign->heap,
-				db_len + fk->constraint_name.length + 2));
+				foreign->heap, (tmp ? 3 : 2)
+				+ db_len + fk->constraint_name.length));
 
-			memcpy(foreign->id, table->name.m_name, db_len);
-			foreign->id[db_len] = '/';
-			strcpy(foreign->id + db_len + 1,
-			       fk->constraint_name.str);
+			char *pos = foreign->id;
+			memcpy(pos, table->name.m_name, db_len);
+			pos += db_len;
+			*(pos++) = '/';
+			if (tmp) {
+				*(pos++) = '\xFF';
+			}
+			strcpy(pos, fk->constraint_name.str);
 		}
 
 		if (foreign->id == NULL) {
@@ -12534,6 +12540,17 @@ create_table_info_t::create_foreign_key(
 		if (!d.str) {
 			d.str = table->name.m_name;
 			d.length = size_t(basename - table->name.m_name - 1);
+		}
+
+		if (m_create_info->is_atomic_replace()
+		    && basename == &table->name.m_name[d.length + 1]
+		    && !memcmp(d.str, table->name.m_name, d.length)
+		    && !strcmp(basename, table_name.str)) {
+			/* Do not convert names when encountering
+			self-referential constraints during
+			CREATE OR REPLACE TABLE. */
+			t.set(LEX_STRING_WITH_LEN(table_name));
+			goto name_converted;
 		}
 
 		if (!strncmp(table_name.str, srv_mysql50_table_name_prefix,
@@ -14261,12 +14278,16 @@ ha_innobase::rename_table(
 
 	if (error == DB_SUCCESS && table_stats && index_stats) {
 		error = dict_stats_rename_table(norm_from, norm_to, trx);
-		if (error == DB_DUPLICATE_KEY) {
-			/* The duplicate may also occur in
-			mysql.innodb_index_stats.  */
-			my_error(ER_DUP_KEY, MYF(0),
-				 "mysql.innodb_table_stats");
-			error = DB_ERROR;
+		if (error) {
+			if (ddl_log_operation) {
+				error = DB_SUCCESS;
+			} else if (error == DB_DUPLICATE_KEY) {
+				/* The duplicate may also occur in
+				mysql.innodb_index_stats.  */
+				my_error(ER_DUP_KEY, MYF(0),
+					"mysql.innodb_table_stats");
+				error = DB_ERROR;
+			}
 		}
 	}
 
@@ -16275,6 +16296,7 @@ ha_innobase::external_lock(
 
 	/* MySQL is releasing a table lock */
 
+	ut_ad(trx->n_mysql_tables_in_use);
 	trx->n_mysql_tables_in_use--;
 	m_mysql_has_locked = false;
 

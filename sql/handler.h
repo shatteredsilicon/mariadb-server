@@ -33,6 +33,7 @@
 #include "mdl.h"
 #include "ha_handler_stats.h"
 #include "optimizer_costs.h"
+#include "backup.h"
 
 #include "sql_analyze_stmt.h" // for Exec_time_tracker 
 
@@ -1774,6 +1775,7 @@ handlerton *ha_default_tmp_handlerton(THD *thd);
 #define HTON_TEMPORARY_NOT_SUPPORTED (1 << 6) //Having temporary tables not supported
 #define HTON_SUPPORT_LOG_TABLES      (1 << 7) //Engine supports log tables
 #define HTON_NO_PARTITION            (1 << 8) //Not partition of these tables
+#define HTON_SQL_PROXY               (1 << 9) //Engine is SQL proxy
 
 /*
   This flag should be set when deciding that the engine does not allow
@@ -1847,6 +1849,12 @@ handlerton *ha_default_tmp_handlerton(THD *thd);
   hton->notify_tabledef_changed() before commit (S3) or after (InnoDB).
 */
 #define HTON_REQUIRES_NOTIFY_TABLEDEF_CHANGED_AFTER_COMMIT (1 << 20)
+
+/*
+  Indicates that rename table is expensive operation.
+  When set atomic CREATE OR REPLACE TABLE is not used.
+*/
+#define HTON_EXPENSIVE_RENAME (1 << 21)
 
 class Ha_trx_info;
 
@@ -2304,6 +2312,11 @@ struct Table_scope_and_contents_source_pod_st // For trivial members
   {
     bzero(this, sizeof(*this));
   }
+  /*
+    NOTE: share->tmp_table (tmp_table_type) is superset of this
+    HA_LEX_CREATE_TMP_TABLE which means TEMPORARY keyword in
+    CREATE TEMPORARY TABLE statement.
+  */
   bool tmp_table() const { return options & HA_LEX_CREATE_TMP_TABLE; }
   void use_default_db_type(THD *thd)
   {
@@ -2348,6 +2361,71 @@ struct Table_scope_and_contents_source_st:
                                 const Lex_ident_db &db);
 };
 
+typedef struct st_ddl_log_state DDL_LOG_STATE;
+
+struct Atomic_info
+{
+  Table_name tmp_name;
+  Table_name backup_name;
+  DDL_LOG_STATE *ddl_log_state_create;
+  DDL_LOG_STATE *ddl_log_state_rm;
+  handlerton *old_hton;
+  backup_log_info drop_entry;
+
+  Atomic_info() : ddl_log_state_create(NULL), ddl_log_state_rm(NULL), old_hton(NULL)
+  {
+    bzero(&drop_entry, sizeof(drop_entry));
+  }
+
+  Atomic_info(DDL_LOG_STATE *ddl_log_state_rm) : ddl_log_state_create(NULL), old_hton(NULL)
+  {
+    Atomic_info::ddl_log_state_rm= ddl_log_state_rm;
+    bzero(&drop_entry, sizeof(drop_entry));
+  }
+
+  bool is_atomic_replace() const
+  {
+    return tmp_name.table_name.str != NULL;
+  }
+};
+
+
+/*
+  mysql_create_table_no_lock can be called in one of the following
+  mutually exclusive situations:
+
+  - Just a normal ordinary CREATE TABLE statement that explicitly
+    defines the table structure.
+
+  - CREATE TABLE ... SELECT. It is special, because only in this case,
+    the list of fields is allowed to have duplicates, as long as one of the
+    duplicates comes from the select list, and the other doesn't. For
+    example in
+
+       CREATE TABLE t1 (a int(5) NOT NUL) SELECT b+10 as a FROM t2;
+
+    the list in alter_info->create_list will have two fields `a`.
+
+  - ALTER TABLE, that creates a temporary table #sql-xxx, which will be later
+    renamed to replace the original table.
+
+  - ALTER TABLE as above, but which only modifies the frm file, it only
+    creates an frm file for the #sql-xxx, the table in the engine is not
+    created.
+
+  - Assisted discovery, CREATE TABLE statement without the table structure.
+
+  These situations are distinguished by the following "create table mode"
+  values, except CREATE ... SELECT which is denoted by non-zero
+  Alter_info::select_field_count.
+*/
+
+#define C_ORDINARY_CREATE         0
+#define C_ALTER_TABLE_FRM_ONLY    1
+#define C_ALTER_TABLE             2
+#define C_ALTER                   3
+#define C_ASSISTED_DISCOVERY      4
+
 
 /**
   This struct is passed to handler table routines, e.g. ha_create().
@@ -2355,7 +2433,8 @@ struct Table_scope_and_contents_source_st:
   parts are handled on the SQL level and are not needed on the handler level.
 */
 struct HA_CREATE_INFO: public Table_scope_and_contents_source_st,
-                       public Schema_specification_st
+                       public Schema_specification_st,
+                       public Atomic_info
 {
   /* TODO: remove after MDEV-20865 */
   Alter_info *alter_info;
@@ -2377,6 +2456,19 @@ struct HA_CREATE_INFO: public Table_scope_and_contents_source_st,
                   const Lex_table_charset_collation_attrs_st &default_cscl,
                   const Lex_table_charset_collation_attrs_st &convert_cscl,
                   const Charset_collation_context &ctx);
+  bool atomic_replace_check_existing(THD *thd, const LEX_CSTRING *db,
+                                     const LEX_CSTRING *table_name) const;
+  bool is_atomic_replace_usable() const
+  {
+    return !tmp_table() && !sequence &&
+           !(db_type->flags & HTON_EXPENSIVE_RENAME) &&
+           !DBUG_IF("ddl_log_expensive_rename");
+  }
+  bool finalize_atomic_replace(THD *thd, TABLE_LIST *orig_table);
+  void finalize_ddl(THD *thd, bool roll_back);
+  bool finalize_locked_tables(THD *thd, bool operation_failed);
+  bool make_tmp_table_list(THD *thd, TABLE_LIST **create_table,
+                           int *create_table_mode);
 };
 
 
@@ -2465,6 +2557,18 @@ struct Table_specification_st: public HA_CREATE_INFO,
                                                   default_charset_collation,
                                                   convert_charset_collation,
                                                   ctx);
+  }
+  bool is_atomic_replace() const
+  {
+    return or_replace() && !or_replace_slave_generated() &&
+           is_atomic_replace_usable();
+  }
+  bool is_atomic_replace(THD *thd, const LEX_CSTRING *db,
+                         const LEX_CSTRING *table_name) const
+  {
+    return or_replace() && !or_replace_slave_generated() &&
+           is_atomic_replace_usable() &&
+           atomic_replace_check_existing(thd, db, table_name);
   }
 };
 
@@ -3291,7 +3395,11 @@ public:
   bool mark_trx_read_write_done;           /* mark_trx_read_write was called */
   bool check_table_binlog_row_based_done; /* check_table_binlog.. was called */
   bool check_table_binlog_row_based_result; /* cached check_table_binlog... */
-  /* 
+  /*
+    Used to tell the table rename do as much as possible (ignore stats errors).
+  */
+  bool ddl_log_operation;
+  /*
     TRUE <=> the engine guarantees that returned records are within the range
     being scanned.
   */
@@ -3466,6 +3574,7 @@ public:
     mark_trx_read_write_done(0),
     check_table_binlog_row_based_done(0),
     check_table_binlog_row_based_result(0),
+    ddl_log_operation(false),
     in_range_check_pushed_down(FALSE), lookup_errkey(-1), errkey(-1),
     key_used_on_scan(MAX_KEY),
     active_index(MAX_KEY), keyread(MAX_KEY),

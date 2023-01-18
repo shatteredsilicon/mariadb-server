@@ -37,6 +37,7 @@
 #include "sql_type.h"               /* vers_kind_t */
 #include "privilege.h"              /* privilege_t */
 #include "my_bit.h"
+#include "structs.h"
 
 /*
   Buffer for unix timestamp in microseconds:
@@ -55,6 +56,7 @@
 
 class Item;				/* Needed by ORDER */
 typedef Item (*Item_ptr);
+class Item_change_list;
 class Item_subselect;
 class Item_field;
 class Item_func_hash;
@@ -97,6 +99,7 @@ typedef ulonglong nested_join_map;
 
 #define tmp_file_prefix "#sql"			/**< Prefix for tmp tables */
 #define tmp_file_prefix_length 4
+#define backup_file_prefix tmp_file_prefix "-backup-"
 #define TMP_TABLE_KEY_EXTRA 8
 #define ROCKSDB_DIRECTORY_NAME "#rocksdb"
 
@@ -372,6 +375,7 @@ typedef struct st_grant_info
 
 enum tmp_table_type
 {
+  TMP_TABLE_ATOMIC_REPLACE= -1,
   NO_TMP_TABLE= 0, NON_TRANSACTIONAL_TMP_TABLE, TRANSACTIONAL_TMP_TABLE,
   INTERNAL_TMP_TABLE, SYSTEM_TMP_TABLE
 };
@@ -1581,6 +1585,7 @@ public:
   bool get_fields_in_item_tree;      /* Signal to fix_field */
   List<Virtual_column_info> vcol_refix_list;
 private:
+  Item_change_list *saved_change_list;
   bool m_needs_reopen;
   bool created;    /* For tmp tables. TRUE <=> tmp table was actually created.*/
 public:
@@ -1985,6 +1990,7 @@ public:
   void vers_fix_old_timestamp(rpl_group_info *rgi);
 #endif
   void find_constraint_correlated_indexes();
+  bool referenced_by_foreign_table(THD *thd, FOREIGN_KEY_INFO **fk_info) const;
 
 /** Number of additional fields used in versioned tables */
 #define VERSIONING_FIELDS 2

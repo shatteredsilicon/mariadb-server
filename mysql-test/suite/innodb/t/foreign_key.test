@@ -2,6 +2,7 @@
 --source include/count_sessions.inc
 --source include/default_charset.inc
 
+call mtr.add_suppression("foreign key constraints");
 SET GLOBAL innodb_stats_persistent = 0;
 
 --echo #
@@ -185,7 +186,6 @@ SET FOREIGN_KEY_CHECKS=1;
 
 --disable_query_log
 call mtr.add_suppression("InnoDB: Table rename might cause two FOREIGN KEY");
-call mtr.add_suppression("InnoDB: Cannot delete/update rows with cascading foreign key constraints that exceed max depth of 15\\.");
 --enable_query_log
 
 CREATE TABLE t1 (a INT PRIMARY KEY) ENGINE=InnoDB;
@@ -747,8 +747,6 @@ DROP TABLE t1;
 --echo # with CONSTRAINTs
 --echo #
 
-call mtr.add_suppression("\\[Warning\\] InnoDB: In ALTER TABLE `test`\\.`t2` has or is referenced in foreign key constraints which are not compatible with the new table definition.");
-
 set foreign_key_checks=on;
 create table t1 (id int not null primary key) engine=innodb;
 create table t2 (id int not null primary key, fid int not null,
@@ -1212,4 +1210,66 @@ drop table t1, t2;
 SET GLOBAL innodb_stats_persistent = @save_stats_persistent;
 
 --echo # End of 10.11 tests
+
+--echo #
+--echo # MDEV-29701 Inconsistencies and eventual failure upon CREATE OR REPLACE with foreign keys
+--echo #
+create table t2 (x int primary key) engine=innodb;
+create table t1 (a int references t2 (x), b int references t1 (a)) engine=innodb;
+
+set session foreign_key_checks = off;
+--error ER_CANT_CREATE_TABLE
+create or replace table t2 (x int, y int) engine=innodb;
+select * from information_schema.innodb_sys_foreign;
+create or replace table t2 (x int primary key, new int) engine=innodb;
+select * from information_schema.innodb_sys_foreign;
+--error ER_CANT_CREATE_TABLE
+create or replace table t2 (x int, z int) engine=innodb;
+select * from information_schema.innodb_sys_foreign;
+set session foreign_key_checks= on;
+
+show create table t2;
+show create table t1;
+
+--error ER_CANT_CREATE_TABLE
+create or replace table t1 (a int references t2 (a)) engine=innodb;
+select * from information_schema.innodb_sys_foreign;
+show create table t1;
+
+create or replace table t1 (a int) engine=innodb;
+select * from information_schema.innodb_sys_foreign;
+
+drop tables if exists t1, t2;
+
+--echo #
+--echo # MDEV-29779 Unexpected ER_ERROR_ON_RENAME upon CREATE OR REPLACE
+--echo #
+create table t1 (a int) engine=innodb;
+create table t2 (pk int primary key) engine=innodb;
+create or replace table t1 (a int, foreign key(a) references t2(pk)) engine=innodb;
+
+set foreign_key_checks = off;
+# Error is introduced by MDEV-34392
+--error ER_FK_COLUMN_CANNOT_CHANGE
+alter table t1 modify a bigint;
+set foreign_key_checks = on;
+
+create or replace table t1 (a int) engine=innodb;
+drop tables t1, t2;
+
+--echo #
+--echo # MDEV-29783 ER_NO_SUCH_TABLE_IN_ENGINE after failed CREATE OR REPLACE with FK violation
+--echo #
+create table t1 (a int, key (a)) engine=innodb;
+create table t2 (b int, foreign key (b) references t1 (a)) engine=innodb;
+# Error is introduced by MDEV-34392
+--error ER_FK_COLUMN_CANNOT_CHANGE_CHILD
+set statement foreign_key_checks=off for alter table t1 modify a varchar(8);
+show create table t1;
+--error ER_ROW_IS_REFERENCED_2
+create or replace table t1 (c int) engine=innodb;
+show create table t1;
+# cleanup
+drop table t2, t1;
+
 --source include/wait_until_count_sessions.inc
