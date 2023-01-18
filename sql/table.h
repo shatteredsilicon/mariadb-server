@@ -707,12 +707,13 @@ public:
   friend struct TABLE_SHARE;
 };
 
+
 /**
   This structure is shared between different table objects. There is one
   instance of table share per one table in the database.
 */
 
-struct TABLE_SHARE
+struct TABLE_SHARE: public Table_name
 {
   TABLE_SHARE() = default;                    /* Remove gcc warning */
 
@@ -781,8 +782,6 @@ struct TABLE_SHARE
     To ensure this one can use set_table_cache() methods.
   */
   LEX_CSTRING table_cache_key;
-  Lex_ident_db db;                    /* Pointer to db */
-  Lex_ident_table table_name;            /* Table name (for open) */
   LEX_CSTRING path;                	/* Path to .frm file (from datadir) */
   LEX_CSTRING normalized_path;		/* unpack_filename(path) */
   LEX_CSTRING connect_string;
@@ -2428,7 +2427,8 @@ struct TABLE_CHAIN
 };
 
 class Table_ident;
-struct TABLE_LIST
+
+struct TABLE_LIST: public Table_name
 {
   TABLE_LIST(THD *thd,
              Lex_ident_db db_str,
@@ -2537,10 +2537,7 @@ struct TABLE_LIST
   TABLE_LIST *next_local;
   /* link in a global list of all queries tables */
   TABLE_LIST *next_global, **prev_global;
-  Lex_ident_db db;
-  Lex_ident_table table_name;
   Lex_ident_i_s_table schema_table_name;
-  Lex_ident_table alias;
   const char    *option;                /* Used by cache index  */
   Item		*on_expr;		/* Used with outer join */
   Name_resolution_context *on_context;  /* For ON expressions */

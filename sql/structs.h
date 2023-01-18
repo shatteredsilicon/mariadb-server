@@ -1103,4 +1103,10 @@ public:
 };
 
 
+struct Table_name
+{
+  Lex_ident_db    db;
+  Lex_ident_table table_name;
+  Lex_ident_table alias;
+};
 #endif /* STRUCTS_INCLUDED */

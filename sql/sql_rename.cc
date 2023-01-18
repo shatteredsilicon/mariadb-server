@@ -258,7 +258,7 @@ struct rename_param
 
 static int
 rename_check_preconditions(THD *thd, rename_param *param,
-                           TABLE_LIST *ren_table,
+                           Table_name *ren_table,
                            const Lex_ident_db &new_db,
 			   const Lex_ident_table &new_table_name,
                            const Lex_ident_table &new_table_alias,
@@ -333,7 +333,7 @@ rename_check_preconditions(THD *thd, rename_param *param,
 static bool
 rename_table_and_triggers(THD *thd, rename_param *param,
                           DDL_LOG_STATE *ddl_log_state,
-                          TABLE_LIST *ren_table, const Lex_ident_db *new_db,
+                          Table_name *ren_table, const Lex_ident_db *new_db,
                           bool skip_error, bool *force_if_exists)
 {
   int rc= 1;
