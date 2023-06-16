@@ -3956,6 +3956,16 @@ FROM JSON_TABLE(
     JSON_KEY_VALUE('{"key1":{"a":1, "b": [1,2,3, {"some_key":"some_val", "c":3}]}, "key2":"val2"}', '$.key1.b[0]'), '$[*]'
     COLUMNS (k VARCHAR(20) PATH '$.key', v VARCHAR(20) PATH '$.value', id FOR ORDINALITY)) AS jt;
 
+--echo #
+--echo # MDEV-31477: The JSON_KEY_VALUE function should print an error message if json_doc is passed as a variable
+--echo #
+
+SET @json = '{"a":1, "b":2, "c" : 3}';
+
+SELECT @json;
+
+SELECT JSON_KEY_VALUE('{"key1": @json}', '$.key1');
+
 --echo # End of 11.2 test
 
 --echo #

@@ -4842,6 +4842,8 @@ NULL
 SELECT JSON_KEY_VALUE('', '$.a');
 JSON_KEY_VALUE('', '$.a')
 NULL
+Warnings:
+Warning	4037	Unexpected end of JSON text in argument 1 to function 'json_key_value'
 SELECT JSON_KEY_VALUE('[1,2,3]', '');
 JSON_KEY_VALUE('[1,2,3]', '')
 NULL
@@ -5016,6 +5018,18 @@ FROM JSON_TABLE(
 JSON_KEY_VALUE('{"key1":{"a":1, "b": [1,2,3, {"some_key":"some_val", "c":3}]}, "key2":"val2"}', '$.key1.b[0]'), '$[*]'
     COLUMNS (k VARCHAR(20) PATH '$.key', v VARCHAR(20) PATH '$.value', id FOR ORDINALITY)) AS jt;
 k	v	id
+#
+# MDEV-31477: The JSON_KEY_VALUE function should print an error message if json_doc is passed as a variable
+#
+SET @json = '{"a":1, "b":2, "c" : 3}';
+SELECT @json;
+@json
+{"a":1, "b":2, "c" : 3}
+SELECT JSON_KEY_VALUE('{"key1": @json}', '$.key1');
+JSON_KEY_VALUE('{"key1": @json}', '$.key1')
+NULL
+Warnings:
+Warning	4038	Syntax error in JSON text in argument 1 to function 'json_key_value' at position 10
 # End of 11.2 test
 #
 # Beginning of 11.2 tests
