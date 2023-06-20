@@ -641,7 +641,13 @@ continue_search:
     goto continue_search;
   }
 
-  return false;
+  return str;
+
+err_return:
+  if (je.s.error)
+    report_json_error(js, &je, 0);
+  null_value= 1;
+  return 0;
 }
 
 
