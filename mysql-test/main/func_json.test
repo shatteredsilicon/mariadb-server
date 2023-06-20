@@ -1147,6 +1147,18 @@ SELECT JSON_OBJECTAGG('"', 1);
 SELECT JSON_OBJECTAGG('\"', 1);
 SELECT JSON_OBJECTAGG('\\', 1);
 
+
+--echo #
+--echo # MDEV-31477: Inconsistent handling while fetching values in json
+--echo #
+
+SET @json = '{"a":1, "b":2, "c" : 3}';
+
+SELECT @json;
+
+SELECT JSON_KEYS('{"key1": @json}', '$.key1');
+SELECT JSON_VALUE('{"key1": @json}', '$.key1');
+
 --echo #
 --echo # MDEV-24784 JSON_ARRAYAGG charset issue
 --echo #
