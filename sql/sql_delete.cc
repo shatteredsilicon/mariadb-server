@@ -355,7 +355,7 @@ bool Sql_cmd_delete::delete_from_single_table(THD *thd)
 
   Delete_plan query_plan(thd->mem_root);
   Explain_delete *explain;
-  Unique_impl *deltempfile= NULL;
+  Unique *deltempfile= NULL;
   bool delete_record= false;
   bool delete_while_scanning= table_list->delete_while_scanning;
   bool portion_of_time_through_update;
@@ -801,13 +801,11 @@ bool Sql_cmd_delete::delete_from_single_table(THD *thd)
       clause.  Instead of deleting the rows, first mark them deleted.
     */
     ha_rows tmplimit=limit;
-    Descriptor *desc= new Fixed_size_keys_for_rowids(table->file);
+    Keys_descriptor *desc= new Fixed_size_keys_for_rowids(table->file);
     if (!desc)
       goto terminate_delete;  // OOM
 
-    deltempfile= new (thd->mem_root) Unique_impl(refpos_cmp, desc,
-                                                 table->file->ref_length,
-                                                 MEM_STRIP_BUF_SIZE, 0, desc);
+    deltempfile= new (thd->mem_root) Unique(desc, MEM_STRIP_BUF_SIZE, 0);
 
     if (!deltempfile)
       goto terminate_delete;  // OOM
@@ -1137,7 +1135,7 @@ bool
 multi_delete::initialize_tables(JOIN *join)
 {
   TABLE_LIST *walk;
-  Unique_impl **tempfiles_ptr;
+  Unique **tempfiles_ptr;
   DBUG_ENTER("initialize_tables");
 
   if (unlikely((thd->variables.option_bits & OPTION_SAFE_UPDATES) &&
@@ -1212,8 +1210,8 @@ multi_delete::initialize_tables(JOIN *join)
     table_being_deleted= delete_tables;
     walk= walk->next_local;
   }
-  Unique_impl *unique;
-  Descriptor *desc;
+  Unique *unique;
+  Keys_descriptor *desc;
   for (;walk ;walk= walk->next_local)
   {
     TABLE *table=walk->table;
@@ -1221,11 +1219,7 @@ multi_delete::initialize_tables(JOIN *join)
     if (!desc)
       DBUG_RETURN(TRUE); // OOM
 
-    unique= new (thd->mem_root) Unique_impl(refpos_cmp,
-                                            desc,
-                                            table->file->ref_length,
-                                            MEM_STRIP_BUF_SIZE,
-                                            0, desc);
+    unique= new (thd->mem_root) Unique(desc, MEM_STRIP_BUF_SIZE, 0);
     if (!unique)
       DBUG_RETURN(TRUE);  // OOM
     *tempfiles_ptr++= unique;
