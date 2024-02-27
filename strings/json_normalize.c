@@ -646,106 +646,107 @@ json_norm_append_to_object(struct json_norm_value *val,
 
 
 static int
-json_norm_parse(struct json_norm_value *root, json_engine_t *je)
+json_norm_parse(struct json_norm_value *root, json_engine_t *je, MEM_ROOT *current_mem_root)
 {
-  size_t current;
-  struct json_norm_value *stack[JSON_DEPTH_LIMIT];
-  int err= 0;
+  size_t current = 0;
+  MEM_ROOT_DYNAMIC_ARRAY stack;
+  int err = 0;
   DYNAMIC_STRING key;
+  struct json_norm_value* root_ptr = root;
 
-  err= init_dynamic_string(&key, NULL, 0, 0);
+  // Initialize the dynamic array to hold pointers to json_norm_value
+  mem_root_dynamic_array_init(current_mem_root, PSI_NOT_INSTRUMENTED,
+                              &stack, sizeof(struct json_norm_value*), NULL,
+                              JSON_DEPTH_DEFAULT, 0, MYF(0));
+
+  // Set the root pointer in the stack
+  mem_root_dynamic_array_set_val(&stack, &root_ptr, current);
+
+  err = init_dynamic_string(&key, NULL, 0, 0);
   if (err)
+  {
     goto json_norm_parse_end;
-
-  memset(stack, 0x00, sizeof(stack));
-  current= 0;
-  stack[current]= root;
+  }
 
   do {
     switch (je->state)
     {
     case JST_KEY:
     {
-      const uchar *key_start= je->s.c_str;
+      const uchar *key_start = je->s.c_str;
       const uchar *key_end;
+      struct json_norm_value* new_val_ptr= NULL;
+      struct json_norm_value** curr_val_ptr = (struct json_norm_value**)mem_root_dynamic_array_get_val(&stack, current);
+      struct json_norm_value* curr_val = *curr_val_ptr;
+      DBUG_ASSERT(curr_val->type == JSON_VALUE_OBJECT);
 
-      DBUG_ASSERT(stack[current]->type == JSON_VALUE_OBJECT);
       do
       {
-        key_end= je->s.c_str;
+        key_end = je->s.c_str;
       } while (json_read_keyname_chr(je) == 0);
 
-      /* we have the key name */
-      /* reset the dynstr: */
+      // Reset the dynstr
       dynstr_trunc(&key, key.length);
-      dynstr_append_mem(&key, (char *)key_start, (key_end - key_start));
+      dynstr_append_mem(&key, (char*)key_start, (key_end - key_start));
 
-      /* After reading the key, we have a follow-up value. */
-      err= json_read_value(je);
+      // After reading the key, we have a follow-up value
+      err = json_read_value(je);
       if (err)
         goto json_norm_parse_end;
 
-      err= json_norm_append_to_object(stack[current], &key, je);
+      err = json_norm_append_to_object(curr_val, &key, je);
       if (err)
         goto json_norm_parse_end;
 
       if (je->value_type == JSON_VALUE_ARRAY ||
           je->value_type == JSON_VALUE_OBJECT)
       {
-        struct json_norm_kv *kv;
-
-        err= ((current + 1) == JSON_DEPTH_LIMIT);
-        if (err)
-          goto json_norm_parse_end;
-
-        kv= json_norm_object_get_last_element(&stack[current]->value.object);
-        stack[++current]= &kv->value;
+        struct json_norm_kv* kv;
+        kv = json_norm_object_get_last_element(&curr_val->value.object);
+        new_val_ptr = &kv->value;
+        mem_root_dynamic_array_set_val(&stack, &new_val_ptr, ++current);
       }
       break;
     }
     case JST_VALUE:
     {
-      struct json_norm_array *current_arr= &stack[current]->value.array;
-      err= json_read_value(je);
+      struct json_norm_value** curr_val_ptr = (struct json_norm_value**)mem_root_dynamic_array_get_val(&stack, current);
+      struct json_norm_value* curr_val = *curr_val_ptr;
+      struct json_norm_array* current_arr = &curr_val->value.array;
+
+      err = json_read_value(je);
       if (err)
         goto json_norm_parse_end;
 
-      DBUG_ASSERT(stack[current]->type == JSON_VALUE_ARRAY);
+      DBUG_ASSERT(curr_val->type == JSON_VALUE_ARRAY);
 
-      err= json_norm_append_to_array(stack[current], je);
+      err = json_norm_append_to_array(curr_val, je);
       if (err)
         goto json_norm_parse_end;
 
       if (je->value_type == JSON_VALUE_ARRAY ||
           je->value_type == JSON_VALUE_OBJECT)
       {
-
-        err= ((current + 1) == JSON_DEPTH_LIMIT);
-        if (err)
-          goto json_norm_parse_end;
-
-        stack[++current]= json_norm_array_get_last_element(current_arr);
+        struct json_norm_value* element = json_norm_array_get_last_element(current_arr);
+        mem_root_dynamic_array_set_val(&stack, &element, ++current);
       }
-
       break;
     }
     case JST_OBJ_START:
-      /* parser found an object (the '{' in JSON) */
+      // Parser found an object (the '{' in JSON)
       break;
     case JST_OBJ_END:
-      /* parser found the end of the object (the '}' in JSON) */
-      /* pop stack */
-      --current;
+      // Parser found the end of the object (the '}' in JSON)
+      --current;  // Pop stack
       break;
     case JST_ARRAY_START:
-      /* parser found an array (the '[' in JSON) */
+      // Parser found an array (the '[' in JSON)
       break;
     case JST_ARRAY_END:
-      /* parser found the end of the array (the ']' in JSON) */
-      /* pop stack */
-      --current;
+      // Parser found the end of the array (the ']' in JSON)
+      --current;  // Pop stack
       break;
-    };
+    }
   } while (json_scan_next(je) == 0);
 
 json_norm_parse_end:
@@ -753,13 +754,14 @@ json_norm_parse_end:
   return err;
 }
 
-
 static int
 json_norm_build(struct json_norm_value *root,
-                const char *s, size_t size, CHARSET_INFO *cs)
+                const char *s, size_t size, CHARSET_INFO *cs,
+                MEM_ROOT *current_mem_root)
 {
   int err= 0;
   json_engine_t je;
+
 
   DBUG_ASSERT(s);
   memset(&je, 0x00, sizeof(je));
@@ -767,26 +769,35 @@ json_norm_build(struct json_norm_value *root,
   memset(root, 0x00, sizeof(struct json_norm_value));
   root->type= JSON_VALUE_UNINITIALIZED;
 
+  mem_root_dynamic_array_init(current_mem_root, PSI_NOT_INSTRUMENTED,
+                              &je.stack, sizeof(int), NULL,
+                              JSON_DEPTH_DEFAULT, 0, MYF(0));
+
   err= json_scan_start(&je, cs, (const uchar *)s, (const uchar *)(s + size));
   if (json_read_value(&je))
+  {
     return err;
-
+  }
   err= json_norm_value_init(root, &je);
 
   if (root->type == JSON_VALUE_OBJECT ||
       root->type == JSON_VALUE_ARRAY)
   {
-    err= json_norm_parse(root, &je);
+    err= json_norm_parse(root, &je, current_mem_root);
     if (err)
+    {
       return err;
+    }
   }
+
   return err;
 }
 
 
 int
 json_normalize(DYNAMIC_STRING *result,
-               const char *s, size_t size, CHARSET_INFO *cs)
+               const char *s, size_t size, CHARSET_INFO *cs,
+               MEM_ROOT *current_mem_root)
 {
   int err= 0;
   uint convert_err= 0;
@@ -794,6 +805,11 @@ json_normalize(DYNAMIC_STRING *result,
   char *s_utf8= NULL;
   size_t in_size;
   const char *in;
+  json_engine_t temp_je;
+
+  mem_root_dynamic_array_init(current_mem_root, PSI_NOT_INSTRUMENTED,
+                              &temp_je.stack, sizeof(int), NULL,
+                              JSON_DEPTH_DEFAULT, 0, MYF(0));
 
   DBUG_ASSERT(result);
 
@@ -829,13 +845,14 @@ json_normalize(DYNAMIC_STRING *result,
   }
 
 
-  if (!json_valid(in, in_size, &my_charset_utf8mb4_bin))
+  if (!(json_valid(in, in_size, &my_charset_utf8mb4_bin, &temp_je) == 0))
   {
     err= 1;
     goto json_normalize_end;
   }
 
-  err= json_norm_build(&root, in, in_size, &my_charset_utf8mb4_bin);
+  err= json_norm_build(&root, in, in_size,
+                    &my_charset_utf8mb4_bin, current_mem_root);
   if (err)
     goto json_normalize_end;
 

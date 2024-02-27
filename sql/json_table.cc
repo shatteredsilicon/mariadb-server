@@ -424,6 +424,19 @@ bool Json_table_nested_path::check_error(const char *str)
   return false; // Ok
 }
 
+void Json_table_nested_path::init_json_engine()
+{
+  mem_root_dynamic_array_init(current_thd->mem_root, PSI_NOT_INSTRUMENTED,
+                              &m_engine.stack, sizeof(int), NULL,
+                              JSON_DEPTH_DEFAULT, 0, MYF(0));
+  mem_root_dynamic_array_init(current_thd->mem_root, PSI_NOT_INSTRUMENTED,
+                              &m_cur_path.steps, sizeof(json_path_step_t), NULL,
+                              JSON_DEPTH_DEFAULT, 0, MYF(0));
+  mem_root_dynamic_array_init(current_thd->mem_root, PSI_NOT_INSTRUMENTED,
+                              &m_path.steps, sizeof(json_path_step_t), NULL,
+                              JSON_DEPTH_DEFAULT, 0, MYF(0));
+}
+
 
 int ha_json_table::rnd_next(uchar *buf)
 {
@@ -469,7 +482,7 @@ int ha_json_table::rnd_next(uchar *buf)
 
 int ha_json_table::fill_column_values(THD *thd, uchar * buf, uchar *pos)
 {
-  MY_BITMAP *orig_map= dbug_tmp_use_all_columns(table, &table->write_set);
+   MY_BITMAP *orig_map= dbug_tmp_use_all_columns(table, &table->write_set);
   int error= 0;
   Counting_error_handler er_handler;
   Field **f= table->field;
@@ -478,6 +491,19 @@ int ha_json_table::fill_column_values(THD *thd, uchar * buf, uchar *pos)
   my_ptrdiff_t ptrdiff= buf - table->record[0];
   Abort_on_warning_instant_set ao_set(table->in_use, FALSE);
   enum_check_fields cf_orig= table->in_use->count_cuted_fields;
+  json_engine_t je;
+  MEM_ROOT_DYNAMIC_ARRAY array_counters;
+  MEM_ROOT current_mem_root;
+
+  init_alloc_root(PSI_NOT_INSTRUMENTED, &current_mem_root,
+                  BLOCK_SIZE_JSON_DYN_ARRAY, 0, MYF(0));
+
+  mem_root_dynamic_array_init(&current_mem_root, PSI_NOT_INSTRUMENTED,
+                              &array_counters, sizeof(int), NULL,
+                              JSON_DEPTH_DEFAULT, 0, MYF(0));
+  mem_root_dynamic_array_init(&current_mem_root, PSI_NOT_INSTRUMENTED,
+                              &je.stack, sizeof(int), NULL,
+                              JSON_DEPTH_DEFAULT, 0, MYF(0));
 
   table->in_use->count_cuted_fields= CHECK_FIELD_ERROR_FOR_NULL;
 
@@ -535,12 +561,13 @@ int ha_json_table::fill_column_values(THD *thd, uchar * buf, uchar *pos)
       case Json_table_column::PATH:
       case Json_table_column::EXISTS_PATH:
       {
-        json_engine_t je;
         json_path_step_t *cur_step;
-        int array_counters[JSON_DEPTH_LIMIT];
         int not_found;
         const uchar* node_start;
         const uchar* node_end;
+
+        mem_root_dynamic_array_reset(&array_counters);
+        mem_root_dynamic_array_reset(&je.stack);
 
         /*
           Get the JSON context node that we will need to evaluate PATH or
@@ -561,8 +588,8 @@ int ha_json_table::fill_column_values(THD *thd, uchar * buf, uchar *pos)
 
         json_scan_start(&je, m_js->charset(), node_start, node_end);
 
-        cur_step= jc->m_path.steps;
-        not_found= json_find_path(&je, &jc->m_path, &cur_step, array_counters) ||
+        cur_step= (json_path_step_t*)(jc->m_path.steps.buffer);
+        not_found= json_find_path(&je, &jc->m_path, &cur_step, &array_counters) ||
                    json_read_value(&je);
 
         if (jc->m_column_type == Json_table_column::EXISTS_PATH)
@@ -605,7 +632,7 @@ int ha_json_table::fill_column_values(THD *thd, uchar * buf, uchar *pos)
                      JSON_PATH_ARRAY_RANGE) &&
                   (json_scan_next(&je) ||
                    !json_find_path(&je, &jc->m_path, &cur_step,
-                                   array_counters)))
+                                   &array_counters)))
               {
                 error= jc->m_on_error.respond(jc, *f,
                                               ER_JSON_TABLE_MULTIPLE_MATCHES);
@@ -625,6 +652,7 @@ cont_loop:
       pos+= 4;
   }
 
+  free_root(&current_mem_root, MYF(0));
   dbug_tmp_restore_column_map(&table->write_set, orig_map);
   thd->pop_internal_handler();
   thd->count_cuted_fields= cf_orig;
@@ -896,6 +924,10 @@ int Json_table_column::set(THD *thd, enum_type ctype, const LEX_CSTRING &path,
 {
   set(ctype);
   m_explicit_cs= cs;
+
+  mem_root_dynamic_array_init(thd->mem_root, PSI_NOT_INSTRUMENTED,
+                              &m_path.steps, sizeof(json_path_step_t), NULL,
+                              JSON_DEPTH_DEFAULT, 0, MYF(0));
   if (json_path_setup(&m_path, thd->variables.collation_connection,
         (const uchar *) path.str, (const uchar *)(path.str + path.length)))
   {
@@ -921,6 +953,10 @@ int Json_table_column::set(THD *thd, enum_type ctype, const LEX_CSTRING &path,
 int Json_table_column::set(THD *thd, enum_type ctype, const LEX_CSTRING &path,
                            const Lex_column_charset_collation_attrs_st &cl)
 {
+  mem_root_dynamic_array_init(thd->mem_root, PSI_NOT_INSTRUMENTED,
+                              &m_path.steps, sizeof(json_path_step_t), NULL,
+                              JSON_DEPTH_DEFAULT, 0, MYF(0));
+
   if (cl.is_empty() || cl.is_contextually_typed_collate_default())
     return set(thd, ctype, path, nullptr);
 
@@ -997,6 +1033,10 @@ int Json_table_column::print(THD *thd, Field **f, String *str)
 
 int Json_table_nested_path::set_path(THD *thd, const LEX_CSTRING &path)
 {
+  mem_root_dynamic_array_init(thd->mem_root, PSI_NOT_INSTRUMENTED,
+                              &m_path.steps, sizeof(json_path_step_t), NULL,
+                              JSON_DEPTH_DEFAULT, 0, MYF(0));
+
   if (json_path_setup(&m_path, thd->variables.collation_connection,
         (const uchar *) path.str, (const uchar *)(path.str + path.length)))
   {
