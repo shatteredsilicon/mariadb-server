@@ -25,12 +25,15 @@ check_json_normalize(const char *in, const char *expected)
 {
   int err;
   DYNAMIC_STRING result;
+  MEM_ROOT current_mem_root;
 
   CHARSET_INFO *cs= &my_charset_utf8mb4_general_ci;
 
   init_dynamic_string(&result, NULL, 0, 0);
+  init_alloc_root(PSI_NOT_INSTRUMENTED, &current_mem_root,
+                  BLOCK_SIZE_JSON_DYN_ARRAY, 0, MYF(0));
 
-  err= json_normalize(&result, in, strlen(in), cs);
+  err= json_normalize(&result, in, strlen(in), cs, &current_mem_root);
 
   ok(err == 0, "normalize err?");
 
@@ -39,6 +42,7 @@ check_json_normalize(const char *in, const char *expected)
     expected, in, result.str);
 
   dynstr_free(&result);
+  free_root(&current_mem_root, MYF(0));
 }
 
 
@@ -46,28 +50,34 @@ static void
 test_json_normalize_invalid(void)
 {
   DYNAMIC_STRING result;
+  MEM_ROOT current_mem_root;
 
   CHARSET_INFO *cs= &my_charset_utf8mb4_general_ci;
 
+  init_alloc_root(PSI_NOT_INSTRUMENTED, &current_mem_root,
+                  BLOCK_SIZE_JSON_DYN_ARRAY, 0, MYF(0));
+
   init_dynamic_string(&result, NULL, 0, 0);
-  ok(json_normalize(&result, STRING_WITH_LEN(""), cs) != 0,
+  ok(json_normalize(&result, STRING_WITH_LEN(""), cs, &current_mem_root) != 0,
      "expected normalized error");
   dynstr_free(&result);
 
   init_dynamic_string(&result, NULL, 0, 0);
-  ok(json_normalize(&result, STRING_WITH_LEN("["), cs) != 0,
+  ok(json_normalize(&result, STRING_WITH_LEN("["), cs, &current_mem_root) != 0,
      "expected normalized error");
   dynstr_free(&result);
 
   init_dynamic_string(&result, NULL, 0, 0);
-  ok(json_normalize(&result, STRING_WITH_LEN("}"), cs) != 0,
+  ok(json_normalize(&result, STRING_WITH_LEN("}"), cs, &current_mem_root) != 0,
      "expected normalized error");
   dynstr_free(&result);
 
   init_dynamic_string(&result, NULL, 0, 0);
-  ok(json_normalize(&result, NULL, 0, cs) != 0,
+  ok(json_normalize(&result, NULL, 0, cs, &current_mem_root) != 0,
      "expected normalized error");
   dynstr_free(&result);
+
+  free_root(&current_mem_root, MYF(0));
 }
 
 
@@ -200,20 +210,25 @@ test_json_normalize_non_utf8(void)
   const char utf8[]= { 0x22, 0xC3, 0x8A, 0x22, 0x00 };
   const char latin[] = { 0x22, 0xCA, 0x22, 0x00 };
   DYNAMIC_STRING result;
+  MEM_ROOT current_mem_root;
   CHARSET_INFO *cs_utf8= &my_charset_utf8mb4_bin;
   CHARSET_INFO *cs_latin= &my_charset_latin1;
 
   init_dynamic_string(&result, NULL, 0, 0);
-  err= json_normalize(&result, utf8, strlen(utf8), cs_utf8);
+  init_alloc_root(PSI_NOT_INSTRUMENTED, &current_mem_root,
+                  BLOCK_SIZE_JSON_DYN_ARRAY, 0, MYF(0));
+  err= json_normalize(&result, utf8, strlen(utf8), cs_utf8, &current_mem_root);
   ok(err == 0, "normalize err?");
   ok((strcmp(utf8, result.str) == 0), "utf8 round trip");
   dynstr_free(&result);
 
   init_dynamic_string(&result, NULL, 0, 0);
-  err= json_normalize(&result, latin, strlen(latin), cs_latin);
+  err= json_normalize(&result, latin, strlen(latin), cs_latin, &current_mem_root);
   ok(err == 0, "normalize err?");
   ok((strcmp(utf8, result.str) == 0), "latin to utf8 round trip");
   dynstr_free(&result);
+
+  free_root(&current_mem_root, MYF(0));
 }
 
 

@@ -109,6 +109,21 @@ String *Item_func_geometry_from_wkb::val_str(String *str)
   return str;
 }
 
+bool Item_func_geometry_from_json::fix_length_and_dec(THD *thd)
+{
+  if (!mem_root_inited)
+    init_alloc_root(PSI_NOT_INSTRUMENTED, &current_mem_root,
+         BLOCK_SIZE_JSON_DYN_ARRAY, 0, MYF(0));
+  mem_root_inited= true;
+
+  mem_root_dynamic_array_init(&current_mem_root, PSI_NOT_INSTRUMENTED,
+                              &je.stack,
+                              sizeof(int), NULL,
+                              JSON_DEPTH_DEFAULT, 0, MYF(0));
+
+  return Item_geometry_func::fix_length_and_dec(thd);
+}
+
 
 String *Item_func_geometry_from_json::val_str(String *str)
 {
@@ -117,7 +132,6 @@ String *Item_func_geometry_from_json::val_str(String *str)
   String *js= args[0]->val_str_ascii(&tmp_js);
   uint32 srid= 0;
   longlong options= 0;
-  json_engine_t je;
 
   if ((null_value= args[0]->null_value))
     return 0;

@@ -41,11 +41,22 @@ struct st_parse_result
 static void parse_json(const uchar *j, struct st_parse_result *result)
 {
   json_engine_t je;
+  MEM_ROOT current_mem_root;
+
+  init_alloc_root(PSI_NOT_INSTRUMENTED, &current_mem_root,
+                  BLOCK_SIZE_JSON_DYN_ARRAY, 0, MYF(0));
+
+  mem_root_dynamic_array_init(&current_mem_root, PSI_NOT_INSTRUMENTED,
+                              &je.stack, sizeof(int), NULL,
+                              JSON_DEPTH_DEFAULT, 0, MYF(0));
 
   bzero(result, sizeof(*result));
 
   if (json_scan_start(&je, ci, s_e(j)))
+  {
+    free_root(&current_mem_root, MYF(0));
     return;
+  }
 
   do
   {
@@ -59,7 +70,10 @@ static void parse_json(const uchar *j, struct st_parse_result *result)
         result->keyname_csum^= je.s.c_next;
       }
       if (je.s.error)
+      {
+        free_root(&current_mem_root, MYF(0));
         return;
+      }
       break;
     case JST_VALUE:
       result->n_values++;
@@ -75,6 +89,7 @@ static void parse_json(const uchar *j, struct st_parse_result *result)
     };
   } while (json_scan_next(&je) == 0);
 
+  free_root(&current_mem_root, MYF(0));
   result->error= je.s.error;
 }
 
@@ -114,15 +129,28 @@ static void
 test_path_parsing()
 {
   json_path_t p;
+  MEM_ROOT current_mem_root;
+
+  init_alloc_root(PSI_NOT_INSTRUMENTED, &current_mem_root,
+                  BLOCK_SIZE_JSON_DYN_ARRAY, 0, MYF(0));
+  mem_root_dynamic_array_init(&current_mem_root, PSI_NOT_INSTRUMENTED,
+                              &p.steps, sizeof(json_path_step_t), NULL,
+                              JSON_DEPTH_DEFAULT, 0, MYF(0));
+
   if (json_path_setup(&p, ci, s_e(p0)))
-    return;
-  ok(p.last_step - p.steps == 4 &&
-     p.steps[0].type == JSON_PATH_ARRAY_WILD &&
-     p.steps[1].type == JSON_PATH_KEY &&
-     p.steps[2].type == JSON_PATH_ARRAY && p.steps[2].n_item == 12 &&
-     p.steps[3].type == JSON_PATH_KEY_WILD &&
-     p.steps[4].type == JSON_PATH_ARRAY_WILD,
+    goto error;
+
+  ok(p.last_step - (json_path_step_t*)(p.steps.buffer) == 4 &&
+     ((json_path_step_t*)(p.steps.buffer)+0)->type == JSON_PATH_ARRAY_WILD &&
+     ((json_path_step_t*)(p.steps.buffer)+1)->type == JSON_PATH_KEY &&
+     ((json_path_step_t*)(p.steps.buffer)+2)->type == JSON_PATH_ARRAY && ((json_path_step_t*)(p.steps.buffer)+2)->n_item == 12 &&
+     ((json_path_step_t*)(p.steps.buffer)+3)->type == JSON_PATH_KEY_WILD &&
+     ((json_path_step_t*)(p.steps.buffer)+4)->type == JSON_PATH_ARRAY_WILD,
      "path");
+
+  error:
+    free_root(&current_mem_root, MYF(0));
+    return;
 }
 
 
@@ -138,36 +166,55 @@ test_search()
 {
   json_engine_t je;
   json_path_t p;
-  json_path_step_t *cur_step;
+  MEM_ROOT_DYNAMIC_ARRAY *cur_step;
   int n_matches, scal_values;
-  int array_counters[JSON_DEPTH_LIMIT];
+  json_path_step_t *tmp_ptr= NULL;
+  MEM_ROOT current_mem_root;
+  MEM_ROOT_DYNAMIC_ARRAY array_counters;
 
+  init_alloc_root(PSI_NOT_INSTRUMENTED, &current_mem_root,
+                  BLOCK_SIZE_JSON_DYN_ARRAY, 0, MYF(0));
+
+  mem_root_dynamic_array_init(&current_mem_root, PSI_NOT_INSTRUMENTED,
+                              &array_counters, sizeof(int), NULL,
+                              JSON_DEPTH_DEFAULT, 0, MYF(0));
+  mem_root_dynamic_array_init(&current_mem_root, PSI_NOT_INSTRUMENTED,
+                              &je.stack, sizeof(int), NULL,
+                              JSON_DEPTH_DEFAULT, 0, MYF(0));
+  mem_root_dynamic_array_init(&current_mem_root, PSI_NOT_INSTRUMENTED,
+                              &p.steps, sizeof(json_path_step_t), NULL,
+                              JSON_DEPTH_DEFAULT, 0, MYF(0));
   if (json_scan_start(&je, ci, s_e(fj0)) ||
       json_path_setup(&p, ci, s_e(fp0)))
-    return;
+    goto end;
 
-  cur_step= p.steps;
+  cur_step= &p.steps;
   n_matches= scal_values= 0;
-  while (json_find_path(&je, &p, &cur_step, array_counters) == 0)
+  tmp_ptr= (json_path_step_t*)(cur_step->buffer);
+  while (json_find_path(&je, &p, &tmp_ptr, &array_counters) == 0)
   {
     n_matches++;
     if (json_read_value(&je))
-      return;
+      goto end;
     if (json_value_scalar(&je))
     {
       scal_values++;
       if (json_scan_next(&je))
-        return;
+        goto end;
     }
     else
     {
       if (json_skip_level(&je) || json_scan_next(&je))
-        return;
+        goto end;
     }
 
   }
 
   ok(n_matches == 3, "search");
+
+  end:
+  free_root(&current_mem_root, MYF(0));
+  return;
 }
 
 
