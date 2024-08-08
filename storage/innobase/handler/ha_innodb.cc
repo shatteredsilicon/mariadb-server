@@ -2881,6 +2881,7 @@ trx_deregister_from_2pc(
 {
   trx->is_registered= false;
   trx->active_commit_ordered= false;
+  trx->active_prepare= false;
 }
 
 /*********************************************************************//**
@@ -17116,6 +17117,7 @@ innobase_xa_prepare(
 		ut_ad(trx_is_registered_for_2pc(trx));
 
 		trx_prepare_for_mysql(trx);
+                trx->active_prepare= true;
 	} else {
 		/* We just mark the SQL statement ended and do not do a
 		transaction prepare */
