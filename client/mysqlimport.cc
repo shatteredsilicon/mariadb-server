@@ -70,6 +70,7 @@ static char * opt_mysql_unix_port=0;
 static char *opt_plugin_dir= 0, *opt_default_auth= 0;
 static longlong opt_ignore_lines= -1;
 static char *opt_dir;
+static char opt_innodb_optimize_keys;
 
 #include <sslopt-vars.h>
 
@@ -172,6 +173,9 @@ static struct my_option my_long_options[] =
    "--ignore-table=database.table.  Only takes effect when used together with "
    "--dir option",
    0, 0, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+   {"innodb-optimize-keys", 0, "Create secondary indexes after data load (Innodb only).",
+   &opt_innodb_optimize_keys, &opt_innodb_optimize_keys, 0, GET_BOOL, NO_ARG,
+   1, 0, 0, 0, 0, 0},
   {"lines-terminated-by", 0, 
    "Lines in the input file are terminated by the given string.",
    &lines_terminated, &lines_terminated, 0, GET_STR,
@@ -577,6 +581,9 @@ static int create_db_if_not_exists(MYSQL *mysql, const char *dbname)
   return 0;
 }
 
+
+#include "import_util.h"
+
 static int handle_one_table(const table_load_params *params, MYSQL *mysql)
 {
   char tablename[FN_REFLEN], hard_path[FN_REFLEN],
@@ -617,9 +624,10 @@ static int handle_one_table(const table_load_params *params, MYSQL *mysql)
   bool tz_utc= false;
   std::string engine;
   std::vector<std::string> triggers;
+  std::string sql_text;
   if (!params->sql_file.empty())
   {
-    std::string sql_text= parse_sql_script(params->sql_file.c_str(), &tz_utc, &triggers,&engine);
+    sql_text= parse_sql_script(params->sql_file.c_str(), &tz_utc, &triggers,&engine);
     if (execute_sql_batch(mysql, sql_text.c_str(),params->sql_file.c_str()))
       DBUG_RETURN(1);
     if (params->data_file.empty())
@@ -649,9 +657,34 @@ static int handle_one_table(const table_load_params *params, MYSQL *mysql)
     if (exec_sql(mysql, sql_statement))
       DBUG_RETURN(1);
   }
+
+  /*
+    Temporarily drop secondary indexes and constraints from Innodb table
+    definitions, if --innodb-optimize-keys is given. We'll add them back
+    later, after the data is loaded.
+  */
+  std::string create_secondary_keys_sql, create_constraints_sql;
+  if (opt_innodb_optimize_keys && engine == "InnoDB" && !sql_text.empty())
+  {
+    auto create_stmt= extract_first_create_table(sql_text);
+    TableDDLInfo ddl_info(create_stmt);
+    auto drop_constraints_sql= ddl_info.drop_constraints_sql();
+    auto drop_secondary_keys_sql= ddl_info.drop_secondary_indexes_sql();
+    create_secondary_keys_sql= ddl_info.add_secondary_indexes_sql();
+    create_constraints_sql= ddl_info.add_constraints_sql();
+    if (!drop_constraints_sql.empty())
+    {
+      if (exec_sql(mysql, drop_constraints_sql))
+        DBUG_RETURN(1);
+    }
+    if (!drop_secondary_keys_sql.empty())
+    {
+      if (exec_sql(mysql, drop_secondary_keys_sql))
+        DBUG_RETURN(1);
+    }
+  }
   if (exec_sql(mysql, "SET collation_database=binary"))
     DBUG_RETURN(1);
-
   to_unix_path(hard_path);
   if (verbose)
   {
@@ -698,6 +731,23 @@ static int handle_one_table(const table_load_params *params, MYSQL *mysql)
     const char *info= mysql_info(mysql);
     if (info) /* If NULL-pointer, print nothing */
       fprintf(stdout, "%s.%s: %s\n", db, tablename, info);
+  }
+
+  if (!create_secondary_keys_sql.empty())
+  {
+    if (verbose)
+      fprintf(stdout,"Adding secondary keys for table %s\n", tablename);
+
+    if (exec_sql(mysql, create_secondary_keys_sql))
+     DBUG_RETURN(1);
+  }
+
+  if (!create_constraints_sql.empty())
+  {
+    if (verbose)
+      fprintf(stdout, "Adding constraints for table %s\n", tablename);
+    if (exec_sql(mysql, create_constraints_sql))
+      DBUG_RETURN(1);
   }
 
   /* Create triggers after loading data */

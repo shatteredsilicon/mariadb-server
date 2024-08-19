@@ -171,13 +171,35 @@ PRIMARY KEY (id)
 CREATE TABLE child (
 id INT,
 parent_id INT,
+c CHAR(4),
 INDEX par_ind (parent_id),
+UNIQUE INDEX(c),
 FOREIGN KEY (parent_id)
 REFERENCES parent(id)
-ON DELETE CASCADE
+ON DELETE CASCADE,
+CHECK (c >= 'a')
 ) ENGINE=INNODB;
 insert into parent values(1),(2);
-insert into child values (1,1),(1,2),(2,1),(2,2);
+insert into child values (1,1,'a'),(1,2,'b'),(2,1,'c'),(2,2,'d');
+CREATE TABLE offices (
+id int NOT NULL AUTO_INCREMENT,
+PRIMARY KEY (id)
+) ENGINE=InnoDB;
+CREATE TABLE users (
+id int NOT NULL AUTO_INCREMENT,
+office_id int DEFAULT NULL,
+slogan text GENERATED ALWAYS AS (concat('Hello world #',office_id)) STORED,
+PRIMARY KEY (id),
+KEY office_id (office_id),
+CONSTRAINT users_ibfk_1 FOREIGN KEY (office_id) REFERENCES offices (id)
+) ENGINE=InnoDB;
+insert into offices values();
+insert into offices values();
+insert into offices values();
+insert into offices values();
+insert into users (office_id) values (1);
+insert into users (office_id) values (2);
+insert into users (office_id) values (3);
 drop database db2;
 use db2;
 select * from parent;
@@ -185,13 +207,66 @@ id
 1
 2
 select * from child;
-id	parent_id
-1	1
-1	2
-2	1
-2	2
-drop table child;
-drop table parent;
+id	parent_id	c
+1	1	a
+1	2	b
+2	1	c
+2	2	d
+show create table parent;
+Table	Create Table
+parent	CREATE TABLE `parent` (
+  `id` int(11) NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci
+show create table child;
+Table	Create Table
+child	CREATE TABLE `child` (
+  `id` int(11) DEFAULT NULL,
+  `parent_id` int(11) DEFAULT NULL,
+  `c` char(4) DEFAULT NULL,
+  UNIQUE KEY `c` (`c`),
+  KEY `par_ind` (`parent_id`),
+  CONSTRAINT `child_ibfk_1` FOREIGN KEY (`parent_id`) REFERENCES `parent` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `CONSTRAINT_1` CHECK (`c` >= 'a')
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci
+drop database db2;
+# Repeat import with --verbose to see "Adding secondary keys" in the output
+Connecting to localhost
+Executing SQL script vardir/tmp/dump/db2/users.sql
+Loading data from SERVER file: vardir/tmp/dump/db2/users.txt into users
+db2.users: Records: 3  Deleted: 0  Skipped: 0  Warnings: 0
+Adding secondary keys for table users
+Adding constraints for table users
+Executing SQL script vardir/tmp/dump/db2/child.sql
+Loading data from SERVER file: vardir/tmp/dump/db2/child.txt into child
+db2.child: Records: 4  Deleted: 0  Skipped: 0  Warnings: 0
+Adding secondary keys for table child
+Adding constraints for table child
+Executing SQL script vardir/tmp/dump/db2/offices.sql
+Loading data from SERVER file: vardir/tmp/dump/db2/offices.txt into offices
+db2.offices: Records: 4  Deleted: 0  Skipped: 0  Warnings: 0
+Executing SQL script vardir/tmp/dump/db2/parent.sql
+Loading data from SERVER file: vardir/tmp/dump/db2/parent.txt into parent
+db2.parent: Records: 2  Deleted: 0  Skipped: 0  Warnings: 0
+Disconnecting from localhost
+# Repeat import with --verbose and --innodb-optimize-indexes=0, to "not" see "Adding secondary indexes"
+Connecting to localhost
+Executing SQL script vardir/tmp/dump/db2/users.sql
+Loading data from SERVER file: vardir/tmp/dump/db2/users.txt into users
+db2.users: Records: 3  Deleted: 0  Skipped: 0  Warnings: 0
+Executing SQL script vardir/tmp/dump/db2/child.sql
+Loading data from SERVER file: vardir/tmp/dump/db2/child.txt into child
+db2.child: Records: 4  Deleted: 0  Skipped: 0  Warnings: 0
+Executing SQL script vardir/tmp/dump/db2/offices.sql
+Loading data from SERVER file: vardir/tmp/dump/db2/offices.txt into offices
+db2.offices: Records: 4  Deleted: 0  Skipped: 0  Warnings: 0
+Executing SQL script vardir/tmp/dump/db2/parent.sql
+Loading data from SERVER file: vardir/tmp/dump/db2/parent.txt into parent
+db2.parent: Records: 2  Deleted: 0  Skipped: 0  Warnings: 0
+Disconnecting from localhost
+drop database db2;
+create database db2;
+use db2;
 CREATE TABLE animals (id mediumint(9)
 NOT NULL AUTO_INCREMENT,
 name char(30) NOT NULL,
