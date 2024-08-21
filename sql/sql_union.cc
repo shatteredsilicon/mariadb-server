@@ -2816,6 +2816,9 @@ bool st_select_lex::cleanup()
   inner_refs_list.empty();
   exclude_from_table_unique_test= FALSE;
   hidden_bit_fields= 0;
+#ifdef NEW_ITEM_SUBSELECT_RECALC_USED_TABLES
+  outer_references_resolved_here= nullptr;
+#endif
   DBUG_RETURN(error);
 }
 
