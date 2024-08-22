@@ -894,7 +894,7 @@ bool mysql_write_frm(ALTER_PARTITION_PARAM_TYPE *lpt, uint flags)
     if (write_log_replace_frm(lpt, part_info->list->entry_pos,
                               (const char*) bak_path,
                               (const char*) path) ||
-        ddl_log_write_execute_entry(part_info->list->entry_pos,
+        ddl_log_write_execute_entry(part_info->list->entry_pos, 0,
                                     &part_info->execute_entry))
     {
       mysql_mutex_unlock(&LOCK_gdl);
@@ -2920,7 +2920,6 @@ mysql_prepare_create_table_finalize(THD *thd, HA_CREATE_INFO *create_info,
   List_iterator_fast<Create_field> it(alter_info->create_list);
   List_iterator<Create_field> it2(alter_info->create_list);
   uint total_uneven_bit_length= 0;
-  int select_field_count= C_CREATE_SELECT(create_table_mode);
   bool tmp_table= create_table_mode == C_ALTER_TABLE;
   const bool create_simple= thd->lex->create_simple();
   bool is_hash_field_needed= false;
@@ -2937,8 +2936,7 @@ mysql_prepare_create_table_finalize(THD *thd, HA_CREATE_INFO *create_info,
     DBUG_RETURN(TRUE);
   }
 
-  select_field_pos= get_select_field_pos(alter_info, select_field_count,
-                                         create_info->versioned());
+  select_field_pos= alter_info->get_select_field_pos(create_info->versioned());
   null_fields= 0;
   create_info->varchar= 0;
   max_key_length= file->max_key_length();
@@ -3098,7 +3096,7 @@ mysql_prepare_create_table_finalize(THD *thd, HA_CREATE_INFO *create_info,
    from the select tables. This order may differ on master and slave. We
    therefore mark it as unsafe.
   */
-  if (select_field_count > 0 && auto_increment)
+  if (alter_info->select_field_count > 0 && auto_increment)
     thd->lex->set_stmt_unsafe(LEX::BINLOG_STMT_UNSAFE_CREATE_SELECT_AUTOINC);
 
   /* Create keys */
@@ -4601,7 +4599,7 @@ int create_table_impl(THD *thd,
 
     handlerton *db_type;
     if (!internal_tmp_table &&
-        ha_table_exists(thd, &db, &table_name,
+        ha_table_exists(thd, &orig_db, &orig_table_name,
                         &create_info->org_tabledef_version, &db_type))
     {
       if (ha_check_if_updates_are_ignored(thd, db_type, "CREATE"))

@@ -2336,8 +2336,7 @@ struct Table_scope_and_contents_source_st:
   bool fix_period_fields(THD *thd, Alter_info *alter_info);
   bool check_fields(THD *thd, Alter_info *alter_info,
                     const Lex_ident_table &table_name,
-                    const Lex_ident_db &db,
-                    int select_count= 0);
+                    const Lex_ident_db &db);
   bool check_period_fields(THD *thd, Alter_info *alter_info);
 
   void vers_check_native();
@@ -2346,8 +2345,7 @@ struct Table_scope_and_contents_source_st:
 
   bool vers_check_system_fields(THD *thd, Alter_info *alter_info,
                                 const Lex_ident_table &table_name,
-                                const Lex_ident_db &db,
-                                int select_count= 0);
+                                const Lex_ident_db &db);
 };
 
 
@@ -5675,7 +5673,8 @@ int ha_discover_table_names(THD *thd, const LEX_CSTRING *db, MY_DIR *dirp,
 bool ha_table_exists(THD *thd, const LEX_CSTRING *db,
                      const LEX_CSTRING *table_name,
                      LEX_CUSTRING *table_version= 0,
-                     handlerton **hton= 0, bool *is_sequence= 0);
+                     handlerton **hton= 0, bool *is_sequence= 0,
+		     uint flags= 0);
 bool ha_check_if_updates_are_ignored(THD *thd, handlerton *hton,
                                      const char *op);
 #endif /* MYSQL_SERVER */
@@ -5825,7 +5824,4 @@ inline void Cost_estimate::reset(handler *file)
   reset();
   avg_io_cost= file->DISK_READ_COST * file->DISK_READ_RATIO;
 }
-
-int get_select_field_pos(Alter_info *alter_info, int select_field_count,
-                         bool versioned);
 #endif /* HANDLER_INCLUDED */

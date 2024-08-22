@@ -6731,7 +6731,7 @@ static my_bool discover_existence(THD *thd, plugin_ref plugin,
 
 bool ha_table_exists(THD *thd, const LEX_CSTRING *db,
                      const LEX_CSTRING *table_name, LEX_CUSTRING *table_id,
-                     handlerton **hton, bool *is_sequence)
+                     handlerton **hton, bool *is_sequence, uint flags)
 {
   handlerton *dummy;
   bool dummy2;
@@ -6768,7 +6768,7 @@ bool ha_table_exists(THD *thd, const LEX_CSTRING *db,
 
   char path[FN_REFLEN + 1];
   size_t path_len = build_table_filename(path, sizeof(path) - 1,
-                                         db->str, table_name->str, "", 0);
+                                         db->str, table_name->str, "", flags);
   st_discover_existence_args args= {path, path_len, db->str, table_name->str, 0, true};
 
   if (file_ext_exists(path, path_len, reg_ext))
@@ -8799,16 +8799,15 @@ bool Table_scope_and_contents_source_st::vers_fix_system_fields(
 }
 
 
-int get_select_field_pos(Alter_info *alter_info, int select_field_count,
-                         bool versioned)
+int Alter_info::get_select_field_pos(bool versioned) const
 {
-  int select_field_pos= alter_info->create_list.elements - select_field_count;
+  int select_field_pos= create_list.elements - select_field_count;
   if (select_field_count && versioned &&
       /*
         ALTER_PARSER_ADD_COLUMN indicates system fields was created implicitly,
         select_field_count guarantees it's not ALTER TABLE
       */
-      alter_info->flags & ALTER_PARSER_ADD_COLUMN)
+      flags & ALTER_PARSER_ADD_COLUMN)
     select_field_pos-= 2;
   return select_field_pos;
 }
@@ -8816,7 +8815,7 @@ int get_select_field_pos(Alter_info *alter_info, int select_field_count,
 
 bool Table_scope_and_contents_source_st::vers_check_system_fields(
         THD *thd, Alter_info *alter_info, const Lex_ident_table &table_name,
-        const Lex_ident_db &db, int select_count)
+        const Lex_ident_db &db)
 {
   if (!(options & HA_VERSIONED_TABLE))
     return false;
@@ -8827,8 +8826,7 @@ bool Table_scope_and_contents_source_st::vers_check_system_fields(
   {
     uint fieldnr= 0;
     List_iterator<Create_field> field_it(alter_info->create_list);
-    uint select_field_pos= (uint) get_select_field_pos(alter_info, select_count,
-                                                       true);
+    uint select_field_pos= (uint) alter_info->get_select_field_pos(true);
     while (Create_field *f= field_it++)
     {
       /*
@@ -9265,11 +9263,10 @@ bool Table_period_info::check_field(const Create_field* f,
 
 bool Table_scope_and_contents_source_st::check_fields(
   THD *thd, Alter_info *alter_info,
-  const Lex_ident_table &table_name, const Lex_ident_db &db, int select_count)
+  const Lex_ident_table &table_name, const Lex_ident_db &db)
 {
-  return vers_check_system_fields(thd, alter_info,
-                                  table_name, db, select_count) ||
-    check_period_fields(thd, alter_info);
+  return (vers_check_system_fields(thd, alter_info, table_name, db) ||
+          check_period_fields(thd, alter_info));
 }
 
 bool Table_scope_and_contents_source_st::check_period_fields(
