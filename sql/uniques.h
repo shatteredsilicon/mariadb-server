@@ -139,9 +139,9 @@ public:
   Fixed_size_keys_descriptor(uint length);
   virtual ~Fixed_size_keys_descriptor() {}
   uint get_length_of_key(uchar *ptr) override { return max_length; }
-  bool setup_for_field(THD *thd, Field *field);
+  bool setup_for_field(THD *thd, Field *field) override;
   bool setup_for_item(THD *thd, Item_sum *item,
-                      uint non_const_args, uint arg_count);
+                      uint non_const_args, uint arg_count) override;
   virtual int compare_keys(uchar *a, uchar *b) override;
   virtual bool is_single_arg() override { return true; }
 };
@@ -456,17 +456,17 @@ public:
          uint size_arg, size_t max_in_memory_size_arg,
          uint min_dupl_count_arg, Descriptor *desc);
   ~Unique_impl();
-  ulong elements_in_tree() { return tree.elements_in_tree; }
+  ulong elements_in_tree() override { return tree.elements_in_tree; }
 
   bool unique_add(void *ptr) override
   {
     return unique_add(ptr, m_descriptor->get_length_of_key((uchar*)ptr));
   }
 
-  bool is_in_memory() { return (my_b_tell(&file) == 0); }
-  void close_for_expansion() { tree.flag= TREE_ONLY_DUPS; }
+  bool is_in_memory() override { return (my_b_tell(&file) == 0); }
+  void close_for_expansion() override { tree.flag= TREE_ONLY_DUPS; }
 
-  bool get(TABLE *table);
+  bool get(TABLE *table) override;
   
   /* Cost of searching for an element in the tree */
   inline static double get_search_cost(ulonglong tree_elems,
@@ -490,11 +490,11 @@ public:
   }
 
   void reset() override;
-  bool walk(TABLE *table, tree_walk_action action, void *walk_action_arg);
+  bool walk(TABLE *table, tree_walk_action action, void *walk_action_arg) override;
 
   uint get_size() const { return size; }
   uint get_full_size() const { return full_size; }
-  size_t get_max_in_memory_size() const { return max_in_memory_size; }
+  size_t get_max_in_memory_size() const override { return max_in_memory_size; }
   bool is_count_stored() { return with_counters; }
   IO_CACHE *get_file ()  { return &file; }
   int write_record_to_file(uchar *key);

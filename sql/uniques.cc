@@ -309,7 +309,8 @@ static double get_merge_many_buffs_cost(THD *thd,
       these will be random seeks.
 */
 
-double Unique_impl::get_use_cost(uint *buffer, size_t nkeys, uint key_size,
+double Unique_impl::get_use_cost(THD *thd,
+                                 uint *buffer, size_t nkeys, uint key_size,
                                  size_t max_in_memory_size,
                                  double compare_factor,
                                  bool intersect_fl, bool *in_memory)
