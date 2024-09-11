@@ -7445,12 +7445,19 @@ struct SORT_FIELD: public SORT_FIELD_ATTR
                    const uchar *b, size_t *b_len) const;
 
 private:
-  int compare_fixed_size_vals(const uchar *a, size_t *a_len,
-                              const uchar *b, size_t *b_len) const;
-  int compare_packed_fixed_size_vals(const uchar *a, size_t *a_len,
-                                     const uchar *b, size_t *b_len) const;
-  int compare_packed_varstrings(const uchar *a, size_t *a_len,
-                                const uchar *b, size_t *b_len) const;
+  typedef int (*compare_fun_type) (const SORT_FIELD *,
+                                   const uchar *, size_t *,
+                                   const uchar *, size_t *);
+  compare_fun_type key_compare_fun = nullptr;
+  static int compare_fixed_size_vals(const SORT_FIELD *sort_field,
+                                     const uchar *a, size_t *a_len,
+                                     const uchar *b, size_t *b_len);
+  static int compare_packed_fixed_size_vals(const SORT_FIELD *sort_field,
+                                            const uchar *a, size_t *a_len,
+                                            const uchar *b, size_t *b_len);
+  static int compare_packed_varstrings(const SORT_FIELD *sort_field,
+                                       const uchar *a, size_t *a_len,
+                                       const uchar *b, size_t *b_len);
 };
 
 

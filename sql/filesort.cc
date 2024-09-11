@@ -2764,6 +2764,12 @@ void SORT_FIELD::setup_key_part(Field *fld, bool is_mem_comparable_arg)
   item= NULL;
   reverse= false;
   SORT_FIELD_ATTR::setup_key_part(fld, is_mem_comparable_arg);
+  if (is_variable_sized())
+    key_compare_fun= SORT_FIELD::compare_packed_varstrings;
+  else if (is_mem_comparable)
+    key_compare_fun= SORT_FIELD::compare_packed_fixed_size_vals;
+  else
+    key_compare_fun= SORT_FIELD::compare_fixed_size_vals;
 }
 
 
@@ -2779,12 +2785,10 @@ void SORT_FIELD::setup_key_part(Field *fld, bool is_mem_comparable_arg)
 */
 void SORT_FIELD_ATTR::setup_key_part(Field *field, bool is_mem_comparable_arg)
 {
-  original_length= length= field->sort_length_without_suffix();
+  original_length= length= field->max_storage_size_without_length_storage();
   cs= field->sort_charset();
   suffix_length= 0;
-  type= field->is_packable() ?
-        SORT_FIELD_ATTR::VARIABLE_SIZE :
-        SORT_FIELD_ATTR::FIXED_SIZE;
+  type= field->is_packable() ? VARIABLE_SIZE : FIXED_SIZE;
   maybe_null= field->maybe_null();
   is_mem_comparable= is_mem_comparable_arg;
   length_bytes= is_variable_sized() ? number_storage_requirement(length) : 0;
@@ -2805,25 +2809,6 @@ void SORT_FIELD_ATTR::setup_key_part(Field *field, bool is_mem_comparable_arg)
     1      key b is second
     0      either key a and key b are both NULL or both are NOT NULL
 */
-
-enum null_comparison_result {
-  BOTH_NULL,
-  A_NULL,
-  B_NULL,
-  BOTH_NOT_NULL
-};
-
-inline enum null_comparison_result compare_null_flag(bool a_null,
-                                                     bool b_null)
-{
-  if (a_null && b_null)
-    return BOTH_NULL;
-  if (a_null)
-    return A_NULL;
-  if (b_null)
-    return B_NULL;
-  return BOTH_NOT_NULL;
-}
 
 /*
   Compare two keys.
@@ -2846,33 +2831,29 @@ int SORT_FIELD::compare_keys(const uchar *a, size_t *a_len,
                              const uchar *b, size_t *b_len) const
 {
   int result;
+  bool a_null = !*a;
+  bool b_null = !*b;
+
   if (maybe_null)
   {
-    /* In sort keys (or packed keys) null_byte is 0 if the key is null. */
-    switch (compare_null_flag(!*a, !*b)) {
-    case BOTH_NULL:
+    if (a_null)
     {
-      // Null byte is always stored.
-      *a_len= *b_len= 1;
-      return 0;
-    }
-    case A_NULL:
+      if (b_null)
+      {
+
+        // Null byte is always stored.
+        *a_len= *b_len= 1;
+        return 0;
+      }
       return -1;
-    case B_NULL:
-      return 1;
-    default:
-      break;
     }
+    if (b_null)
+      return 1;
     a++;
     b++;
   }
 
-  if (is_variable_sized())
-    result= compare_packed_varstrings(a, a_len, b, b_len);
-  else if (is_mem_comparable)
-      result= compare_packed_fixed_size_vals(a, a_len, b, b_len);
-  else
-    result= compare_fixed_size_vals(a, a_len, b, b_len);
+  result= key_compare_fun(this, a, a_len, b, b_len);
 
   // Null byte is always stored.
   if (result == 0 && maybe_null)
@@ -2884,25 +2865,28 @@ int SORT_FIELD::compare_keys(const uchar *a, size_t *a_len,
 }
 
 
-int SORT_FIELD::compare_packed_varstrings(const uchar *a, size_t *a_len,
-                                          const uchar *b, size_t *b_len) const
+int SORT_FIELD::compare_packed_varstrings(const SORT_FIELD *sort_field,
+                                          const uchar *a, size_t *a_len,
+                                          const uchar *b, size_t *b_len)
 {
   int retval;
   size_t a_length, b_length;
+  uint length_bytes= sort_field->length_bytes;
+  uint suffix_length= sort_field->suffix_length;
   a_length= read_key_part_length(a, length_bytes);
   b_length= read_key_part_length(b, length_bytes);
 
   *a_len= length_bytes + a_length;
   *b_len= length_bytes + b_length;
 
-  retval= cs->strnncollsp(a + length_bytes,
-                          a_length - suffix_length,
-                          b + length_bytes,
-                          b_length - suffix_length);
+  retval= sort_field->cs->strnncollsp(a + length_bytes,
+                                      a_length - suffix_length,
+                                      b + length_bytes,
+                                      b_length - suffix_length);
 
   if (!retval && suffix_length)
   {
-    DBUG_ASSERT(cs == &my_charset_bin);
+    DBUG_ASSERT(sort_field->cs == &my_charset_bin);
     // comparing the length stored in suffix bytes for binary strings
     a= a + length_bytes + a_length - suffix_length;
     b= b + length_bytes + b_length - suffix_length;
@@ -2913,20 +2897,22 @@ int SORT_FIELD::compare_packed_varstrings(const uchar *a, size_t *a_len,
 }
 
 
-int SORT_FIELD::compare_packed_fixed_size_vals(const uchar *a, size_t *a_len,
-                                               const uchar *b, size_t *b_len) const
+int SORT_FIELD::compare_packed_fixed_size_vals(const SORT_FIELD *sort_field,
+                                               const uchar *a, size_t *a_len,
+                                               const uchar *b, size_t *b_len)
 {
-  *a_len= length;
-  *b_len= length;
-  return memcmp(a, b, length);
+  *a_len= sort_field->length;
+  *b_len= sort_field->length;
+  return memcmp(a, b, sort_field->length);
 }
 
-int SORT_FIELD::compare_fixed_size_vals(const uchar *a, size_t *a_len,
-                                        const uchar *b, size_t *b_len) const
+int SORT_FIELD::compare_fixed_size_vals(const SORT_FIELD *sort_field,
+                                        const uchar *a, size_t *a_len,
+                                        const uchar *b, size_t *b_len)
 {
-  *a_len= length;
-  *b_len= length;
-  return field->cmp(a, b);
+  *a_len= sort_field->length;
+  *b_len= sort_field->length;
+  return sort_field->field->cmp(a, b);
 }
 
 
