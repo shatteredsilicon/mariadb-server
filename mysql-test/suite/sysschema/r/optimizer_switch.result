@@ -5,6 +5,7 @@ condition_pushdown_for_subquery	on
 condition_pushdown_from_having	on
 derived_merge	on
 derived_with_keys	on
+duplicateweedout	on
 exists_to_in	on
 extended_keys	on
 firstmatch	on
