@@ -28,7 +28,7 @@ select * from t1;
 
 # Test --dir
 --replace_result $MYSQLTEST_VARDIR vardir
-# Ignore mtr.test_suppressions (may have suppressions or now), mysql.proc is smaller without perfschema/sys schema
+# Ignore mtr.test_suppressions (may have suppressions or not), mysql.proc is smaller without perfschema/sys schema
 --exec $MYSQL_IMPORT --local --verbose --dir $MYSQLTEST_VARDIR/tmp/dump --ignore-table=mtr.test_suppressions --ignore-table=mysql.proc
 
 drop table t1;
@@ -185,4 +185,3 @@ use test;
 --exec $MYSQL_IMPORT --dir $MYSQLTEST_VARDIR/tmp/dump --parallel=300 2>&1
 
 --rmdir $MYSQLTEST_VARDIR/tmp/dump
-

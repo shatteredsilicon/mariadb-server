@@ -43,6 +43,7 @@
 #include <vector>
 #include <unordered_set>
 #include <my_dir.h>
+#include "import_util.h"
 
 tpool::thread_pool *thread_pool;
 static std::vector<MYSQL *> all_tp_connections;
@@ -55,7 +56,10 @@ static char *field_escape(char *to,const char *from,uint length);
 static char *add_load_option(char *ptr,const char *object,
 			     const char *statement);
 
-static my_bool	verbose=0,lock_tables=0,ignore_errors=0,opt_delete=0,
+static std::string parse_sql_script(const char *filepath, bool *tz_utc,
+                                    std::vector<std::string> *trigger_defs);
+
+static my_bool  verbose=0,lock_tables=0,ignore_errors=0,opt_delete=0,
                 replace, silent, ignore, ignore_foreign_keys,
                 opt_compress, opt_low_priority, tty_password;
 static my_bool debug_info_flag= 0, debug_check_flag= 0;
@@ -83,9 +87,27 @@ struct table_load_params
   std::string data_file; /* name of the file to load with LOAD DATA INFILE */
   std::string sql_file;  /* name of the file that contains CREATE TABLE or
                             CREATE VIEW */
-  std::string tablename; /* name of the table */
   std::string dbname;    /* name of the database */
-  ulonglong size;        /* size of the data file */
+  bool tz_utc= false;    /* true if the script sets the timezone to UTC */
+  bool is_view= false;   /* true if the script is for a VIEW */
+  std::vector<std::string> triggers; /* CREATE TRIGGER statements */
+  ulonglong size= 0;     /* size of the data file */
+  std::string sql_text;   /* content of the SQL file, without triggers */
+  TableDDLInfo _ddl_info; /* parsed CREATE TABLE statement */
+
+  table_load_params(const char* dfile, const char* sqlfile,
+    const char* db, ulonglong data_size)
+      : data_file(dfile), sql_file(sqlfile),
+        dbname(db), triggers(),
+        sql_text(parse_sql_script(sqlfile, &tz_utc, &triggers)),
+        _ddl_info(sql_text),
+        size(data_size)
+  {
+    is_view= _ddl_info.table_name.empty();
+  }
+  int create_table_or_view(MYSQL *);
+  int load(MYSQL *);
+  int post_data_load(MYSQL *);
 };
 
 std::unordered_set<std::string> ignore_databases;
@@ -509,8 +531,7 @@ static int exec_sql(MYSQL *mysql, const std::string& s)
 
   @return content of the file as a string, excluding CREATE TRIGGER statements
 */
-static std::string parse_sql_script(const char *filepath, bool *tz_utc, std::vector<std::string> *create_trigger_Defs,
-    std::string *engine)
+static std::string parse_sql_script(const char *filepath, bool *tz_utc, std::vector<std::string> *create_trigger_Defs)
 {
   /*Read full file to string*/
   std::ifstream t(filepath);
@@ -538,8 +559,9 @@ static std::string parse_sql_script(const char *filepath, bool *tz_utc, std::vec
     auto end_pos= sql_text.find(CREATE_TRIGGER_SUFFIX, pos);
     if (end_pos == std::string::npos)
       break;
-    create_trigger_Defs->push_back(sql_text.substr(pos + sizeof(CREATE_TRIGGER_PREFIX)-1,
-        end_pos - pos - sizeof(CREATE_TRIGGER_PREFIX) +1));
+    auto trigger_def= sql_text.substr(pos + sizeof(CREATE_TRIGGER_PREFIX) - 1,
+                      end_pos - pos - sizeof(CREATE_TRIGGER_PREFIX) + 1);
+    create_trigger_Defs->push_back(trigger_def);
     sql_text.erase(pos, end_pos - pos + sizeof(CREATE_TRIGGER_SUFFIX) - 1);
   }
 
@@ -549,16 +571,6 @@ static std::string parse_sql_script(const char *filepath, bool *tz_utc, std::vec
    with --tz-utc option
   */
   *tz_utc= sql_text.find("SET TIME_ZONE='+00:00'") != std::string::npos;
-
-  *engine= "";
-  auto engine_pos= sql_text.find("ENGINE=");
-  if (engine_pos != std::string::npos)
-  {
-    engine_pos+= 7;
-    auto end_pos= sql_text.find_first_of(" ", engine_pos);
-    if (end_pos != std::string::npos)
-      *engine= sql_text.substr(engine_pos, end_pos - engine_pos);
-  }
   return sql_text;
 }
 
@@ -584,65 +596,85 @@ static int create_db_if_not_exists(MYSQL *mysql, const char *dbname)
 
 #include "import_util.h"
 
-static int handle_one_table(const table_load_params *params, MYSQL *mysql)
+int table_load_params::create_table_or_view(MYSQL* mysql)
+{
+  if (sql_file.empty())
+    return 0;
+
+  if (verbose && !sql_file.empty())
+  {
+    fprintf(stdout, "Executing SQL script %s\n", sql_file.c_str());
+  }
+  if (!dbname.empty())
+  {
+    if (mysql_select_db(mysql, dbname.c_str()))
+    {
+      if (create_db_if_not_exists(mysql, dbname.c_str()))
+        return 1;
+      if (mysql_select_db(mysql, dbname.c_str()))
+      {
+        db_error(mysql);
+        return 1;
+      }
+    }
+  }
+  if (sql_text.empty())
+  {
+    fprintf(stderr, "Error: CREATE TABLE statement not found in %s\n",
+              sql_file.c_str());
+    return 1;
+  }
+  if (execute_sql_batch(mysql, sql_text.c_str(), sql_file.c_str()))
+    return 1;
+  /*
+  Temporarily drop from table definitions, if --innodb-optimize-keys is given. We'll add them back
+  later, after the data is loaded.
+*/
+  auto drop_constraints_sql= _ddl_info.drop_constraints_sql();
+  if (!drop_constraints_sql.empty())
+  {
+    if (exec_sql(mysql, drop_constraints_sql))
+      return 1;
+  }
+  return 0;
+}
+
+int table_load_params::load(MYSQL *mysql)
 {
   char tablename[FN_REFLEN], hard_path[FN_REFLEN],
        escaped_name[FN_REFLEN * 2 + 1],
        sql_statement[FN_REFLEN*16+256], *end;
-  DBUG_ENTER("handle_one_table");
-  DBUG_PRINT("enter",("datafile: %s",params->data_file.c_str()));
+  DBUG_ENTER("table_load_params::load");
+  DBUG_PRINT("enter",("datafile: %s",data_file.c_str()));
+  DBUG_ASSERT(!dbname.empty());
+
+  if (data_file.empty())
+    DBUG_RETURN(0);
 
   if (aborting)
-    return 1;
-  if (verbose && !params->sql_file.empty())
+    DBUG_RETURN(0);
+
+  if (!dbname.empty() && mysql_select_db(mysql, dbname.c_str()))
   {
-    fprintf(stdout, "Executing SQL script %s\n", params->sql_file.c_str());
+    db_error(mysql);
+    DBUG_RETURN(1);
   }
 
-  if (!params->dbname.empty())
-  {
-    if (mysql_select_db(mysql, params->dbname.c_str()))
-    {
-      if (create_db_if_not_exists(mysql, params->dbname.c_str()))
-        DBUG_RETURN(1);
-      if (mysql_select_db(mysql, params->dbname.c_str()))
-          db_error(mysql);
-    }
-  }
-
-  const char *filename= params->data_file.c_str();
-  if (!filename[0])
-    filename= params->sql_file.c_str();
+  const char *filename= data_file.c_str();
 
   fn_format(tablename, filename, "", "", 1 | 2); /* removes path & ext. */
 
-  const char *db= current_db ? current_db : params->dbname.c_str();
+  const char *db= current_db ? current_db : dbname.c_str();
   std::string full_tablename= quote_identifier(db);
   full_tablename+= ".";
   full_tablename+= quote_identifier(tablename);
 
-  bool tz_utc= false;
-  std::string engine;
-  std::vector<std::string> triggers;
-  std::string sql_text;
-  if (!params->sql_file.empty())
-  {
-    sql_text= parse_sql_script(params->sql_file.c_str(), &tz_utc, &triggers,&engine);
-    if (execute_sql_batch(mysql, sql_text.c_str(),params->sql_file.c_str()))
-      DBUG_RETURN(1);
-    if (params->data_file.empty())
-    {
-      /*
-        We only use .sql extension for VIEWs, so we're done
-        with this file, there is no data to load.
-      */
-      DBUG_RETURN(0);
-    }
-    if (tz_utc && exec_sql(mysql, "SET TIME_ZONE='+00:00';"))
-      DBUG_RETURN(1);
-    if (exec_sql(mysql, std::string("ALTER TABLE ") + full_tablename + " DISABLE KEYS"))
-      DBUG_RETURN(1);
-  }
+  if (tz_utc && exec_sql(mysql, "SET TIME_ZONE='+00:00';"))
+    DBUG_RETURN(1);
+  if (exec_sql(mysql,
+               std::string("ALTER TABLE ") + full_tablename + " DISABLE KEYS"))
+   DBUG_RETURN(1);
+
   if (!opt_local_file)
     strmov(hard_path,filename);
   else
@@ -658,27 +690,14 @@ static int handle_one_table(const table_load_params *params, MYSQL *mysql)
       DBUG_RETURN(1);
   }
 
-  /*
-    Temporarily drop secondary indexes and constraints from Innodb table
-    definitions, if --innodb-optimize-keys is given. We'll add them back
-    later, after the data is loaded.
-  */
-  std::string create_secondary_keys_sql, create_constraints_sql;
-  if (opt_innodb_optimize_keys && engine == "InnoDB" && !sql_text.empty())
+
+  bool recreate_secondary_keys= false;
+  if (opt_innodb_optimize_keys && _ddl_info.storage_engine == "InnoDB")
   {
-    auto create_stmt= extract_first_create_table(sql_text);
-    TableDDLInfo ddl_info(create_stmt);
-    auto drop_constraints_sql= ddl_info.drop_constraints_sql();
-    auto drop_secondary_keys_sql= ddl_info.drop_secondary_indexes_sql();
-    create_secondary_keys_sql= ddl_info.add_secondary_indexes_sql();
-    create_constraints_sql= ddl_info.add_constraints_sql();
-    if (!drop_constraints_sql.empty())
-    {
-      if (exec_sql(mysql, drop_constraints_sql))
-        DBUG_RETURN(1);
-    }
+    auto drop_secondary_keys_sql= _ddl_info.drop_secondary_indexes_sql();
     if (!drop_secondary_keys_sql.empty())
     {
+      recreate_secondary_keys= true;
       if (exec_sql(mysql, drop_secondary_keys_sql))
         DBUG_RETURN(1);
     }
@@ -733,46 +752,25 @@ static int handle_one_table(const table_load_params *params, MYSQL *mysql)
       fprintf(stdout, "%s.%s: %s\n", db, tablename, info);
   }
 
-  if (!create_secondary_keys_sql.empty())
-  {
-    if (verbose)
-      fprintf(stdout,"Adding secondary keys for table %s\n", tablename);
 
-    if (exec_sql(mysql, create_secondary_keys_sql))
-     DBUG_RETURN(1);
-  }
+  if (exec_sql(mysql, std::string("ALTER TABLE ") + full_tablename + " ENABLE KEYS;"))
+    DBUG_RETURN(1);
 
-  if (!create_constraints_sql.empty())
+  if (_ddl_info.storage_engine == "MyISAM" || _ddl_info.storage_engine == "Aria")
   {
-    if (verbose)
-      fprintf(stdout, "Adding constraints for table %s\n", tablename);
-    if (exec_sql(mysql, create_constraints_sql))
+    /* Avoid "table was not properly closed" warnings */
+    if (exec_sql(mysql, std::string("FLUSH TABLE ").append(full_tablename).c_str()))
       DBUG_RETURN(1);
   }
-
-  /* Create triggers after loading data */
-  for (const auto &trigger: triggers)
+  if (recreate_secondary_keys)
   {
-    if (mysql_query(mysql,trigger.c_str()))
+    auto create_secondary_keys_sql= _ddl_info.add_secondary_indexes_sql();
+    if (!create_secondary_keys_sql.empty())
     {
-      db_error_with_table(mysql, tablename);
-      DBUG_RETURN(1);
-    }
-  }
-
-  if (!params->sql_file.empty())
-  {
-    if (exec_sql(mysql, std::string("ALTER TABLE ") + full_tablename + " ENABLE KEYS;"))
-        DBUG_RETURN(1);
-
-    if (engine == "MyISAM" || engine == "Aria")
-    {
-      /* Avoid "table was not properly closed" warnings */
-      if (exec_sql(mysql, std::string("FLUSH TABLE ").append(full_tablename).c_str()))
+      if (exec_sql(mysql, create_secondary_keys_sql))
         DBUG_RETURN(1);
     }
   }
-
   if (tz_utc)
   {
     if (exec_sql(mysql, "SET TIME_ZONE=@save_tz;"))
@@ -781,6 +779,30 @@ static int handle_one_table(const table_load_params *params, MYSQL *mysql)
   DBUG_RETURN(0);
 }
 
+int table_load_params::post_data_load(MYSQL* mysql)
+{
+  if (!dbname.empty() && mysql_select_db(mysql, dbname.c_str()))
+  {
+    db_error(mysql);
+    return 1;
+  }
+  for (const auto &create_trigger_def : triggers)
+  {
+    if (exec_sql(mysql, create_trigger_def))
+      return 1;
+  }
+  if (opt_innodb_optimize_keys && _ddl_info.storage_engine == "InnoDB")
+  {
+ 
+    std::string constraints= _ddl_info.add_constraints_sql();
+    if (!constraints.empty())
+    {
+      if (exec_sql(mysql, constraints))
+        return 1;
+    }
+  }
+  return 0;
+}
 
 
 static void lock_table(MYSQL *mysql, int tablecount, char **raw_tablename)
@@ -949,8 +971,10 @@ static void db_error(MYSQL *mysql)
   const char *info= mysql_info(mysql);
   auto err= mysql_errno(mysql);
   auto err_text = mysql_error(mysql);
-
-  my_printf_error(0,"Error: %d %s %s", MYF(0), err, err_text, info);
+  if (info)
+    my_printf_error(0,"Error: %d %s %s", MYF(0), err, err_text, info);
+  else
+    my_printf_error(0, "Error %d %s", MYF(0), err, err_text);
   safe_exit(1, mysql);
 }
 
@@ -1017,7 +1041,8 @@ static thread_local MYSQL *thread_local_mysql;
 void load_single_table(void *arg)
 {
   int error;
-  if((error= handle_one_table((const table_load_params *) arg, thread_local_mysql)))
+  table_load_params *params= (table_load_params *) arg;
+  if ((error= params->load(thread_local_mysql)))
     set_exitcode(error);
 }
 
@@ -1078,8 +1103,7 @@ static void tpool_thread_exit(void)
   @note files are sorted by size, descending
 */
 static void scan_backup_dir(const char *dir,
-                            std::vector<table_load_params> &files,
-                            std::vector<table_load_params> &views)
+                            std::vector<table_load_params> &files)
 {
   MY_DIR *dir_info;
   std::vector<std::string> subdirs;
@@ -1123,8 +1147,6 @@ static void scan_backup_dir(const char *dir,
     }
     for (size_t j= 0; j < dir_info2->number_of_files; j++)
     {
-      table_load_params par{};
-      par.dbname= dbname;
       fi= &dir_info2->dir_entry[j];
       if (has_extension(fi->name, ".sql") || has_extension(fi->name, ".txt"))
       {
@@ -1151,13 +1173,14 @@ static void scan_backup_dir(const char *dir,
         /* test file*/
         if (has_extension(fi->name, ".txt"))
         {
-          par.data_file= file;
-          par.size= fi->mystat->st_size;
-          par.sql_file= file.substr(0, file.size() - 4) + ".sql";
-          if (access(par.sql_file.c_str(), F_OK))
+          auto sql_file= file.substr(0, file.size() - 4) + ".sql";
+          if (access(sql_file.c_str(), F_OK))
           {
-            fatal_error("Expected file '%s' is missing",par.sql_file.c_str());
+            fatal_error("Expected file '%s' is missing",sql_file.c_str());
           }
+          table_load_params par(file.c_str(), sql_file.c_str(), dbname,
+                                fi->mystat->st_size);
+
           files.push_back(par);
         }
         else if (has_extension(fi->name, ".sql"))
@@ -1169,9 +1192,9 @@ static void scan_backup_dir(const char *dir,
           std::string txt_file= file.substr(0, file.size() - 4) + ".txt";
           if (access(txt_file.c_str(), F_OK))
           {
-            par.sql_file= file;
-            par.size= fi->mystat->st_size;
-            views.push_back(par);
+            table_load_params par("", file.c_str(), dbname,
+                                  fi->mystat->st_size);
+            files.push_back(par);
           }
         }
         else
@@ -1188,16 +1211,17 @@ static void scan_backup_dir(const char *dir,
   std::sort(files.begin(), files.end(),
             [](const table_load_params &a, const table_load_params &b) -> bool
             {
+               /* Sort views after base tables */
+               if (a.is_view && !b.is_view)
+                 return false;
+               if (!a.is_view && b.is_view)
+                 return true;
+               /* Sort by size descending */
               if (a.size > b.size)
                   return true;
               if (a.size < b.size)
                   return false;
-              return a.sql_file < b.sql_file;
-            });
-
-  std::sort(views.begin(), views.end(),
-            [](const table_load_params &a, const table_load_params &b) -> bool
-            {
+              /* If sizes are equal, sort by name */
               return a.sql_file < b.sql_file;
             });
 }
@@ -1221,35 +1245,51 @@ int main(int argc, char **argv)
     free_defaults(argv_to_free);
     return(1);
   }
-
+  if (opt_use_threads > MAX_THREADS)
+  {
+    fatal_error("Too many connections, max value for --parallel is %d\n",
+                MAX_THREADS);
+  }
   sf_leaking_memory=0; /* from now on we cleanup properly */
 
-  std::vector<table_load_params> files_to_load, views_to_load;
+  std::vector<table_load_params> files_to_load;
 
   if (opt_dir)
   {
     ignore_foreign_keys= 1;
     if (argc)
       fatal_error("Invalid arguments for --dir option");
-    scan_backup_dir(opt_dir, files_to_load, views_to_load);
+    scan_backup_dir(opt_dir, files_to_load);
   }
   else
   {
     for (; *argv != NULL; argv++)
     {
-      table_load_params p{};
-      p.data_file= *argv;
+      table_load_params p(*argv, "", current_db, 0);
       files_to_load.push_back(p);
     }
+  }
+  if (files_to_load.empty())
+  {
+    fatal_error("No files to load");
+    return 1;
+  }
+  MYSQL *mysql=
+      db_connect(current_host, current_db, current_user, opt_password);
+  if (!mysql)
+  {
+    free_defaults(argv_to_free);
+    return 1;
+  }
+
+  for (auto &f : files_to_load)
+  {
+    if (f.create_table_or_view(mysql))
+      set_exitcode(1);
   }
 
   if (opt_use_threads && !lock_tables)
   {
-    if (opt_use_threads > MAX_THREADS)
-    {
-      fatal_error("Too many connections, max value for --parallel is %d\n",
-                  MAX_THREADS);
-    }
     init_tp_connections(opt_use_threads);
     thread_pool= tpool::create_thread_pool_generic(opt_use_threads,opt_use_threads);
     thread_pool->set_thread_callbacks(tpool_thread_init,tpool_thread_exit);
@@ -1264,35 +1304,19 @@ int main(int argc, char **argv)
     delete thread_pool;
     close_tp_connections();
     thread_pool= nullptr;
-    files_to_load.clear();
   }
-  /*
-    The following block handles single-threaded load.
-    Also views that must be created after the base tables, are created here.
-
-    BUG: funny case would be views that select from other views, won't generally work.
-    It won't work in mysqldump either, but it's not a common case.
-  */
-  if (!files_to_load.empty() || !views_to_load.empty())
+  else
   {
-    MYSQL *mysql= db_connect(current_host,current_db,current_user,opt_password);
-    if (!mysql)
-    {
-      free_defaults(argv_to_free);
-      return(1); /* purecov: dead code */
-    }
-
     if (lock_tables)
       lock_table(mysql, argc, argv);
-    for (const auto &f : files_to_load)
-      if ((error= handle_one_table(&f, mysql)))
-          set_exitcode(error);
-
-    for (const auto &v : views_to_load)
-      if ((error= handle_one_table(&v, mysql)))
+    for (auto &f : files_to_load)
+      if ((error= f.load(mysql)))
         set_exitcode(error);
-
-    db_disconnect(current_host, mysql);
+  }
+  for (auto &f : files_to_load)
+  {
+    if (f.post_data_load(mysql))
+      set_exitcode(1);
   }
   safe_exit(0, 0);
   return(exitcode);
