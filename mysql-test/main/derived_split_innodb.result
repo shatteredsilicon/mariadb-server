@@ -906,3 +906,13 @@ cnt
 6
 DROP TABLE t1;
 # End of 10.4 tests
+#
+# MDEV-33139: Segfault at optimize_keyuse() during splitting optimization
+#
+CREATE TABLE t1 (i INT, KEY (i)) ENGINE=innodb;
+INSERT INTO t1 VALUES ((
+SELECT 1 FROM (SELECT i FROM t1 GROUP BY i) a
+NATURAL JOIN t1 b
+NATURAL JOIN (SELECT i FROM t1) c));
+DROP TABLE t1;
+# End of 10.5 tests

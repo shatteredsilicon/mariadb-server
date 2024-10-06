@@ -8736,6 +8736,14 @@ Item *Item_ref::get_tmp_table_item(THD *thd)
 }
 
 
+bool Item_ref::set_fields_as_dependent_processor(void *arg)
+{
+  DBUG_ASSERT(can_be_depended);
+  depended_from= (st_select_lex *) arg;
+  return false;
+}
+
+
 void Item_ref_null_helper::print(String *str, enum_query_type query_type)
 {
   str->append(STRING_WITH_LEN("<ref_null_helper>("));

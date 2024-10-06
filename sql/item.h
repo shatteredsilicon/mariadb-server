@@ -5744,6 +5744,7 @@ public:
     *ref= (*ref)->remove_item_direct_ref();
     return this;
   }
+  bool set_fields_as_dependent_processor(void *arg) override;
 };
 
 
