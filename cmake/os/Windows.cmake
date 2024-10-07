@@ -129,16 +129,6 @@ IF(MSVC)
     MESSAGE(FATAL_ERROR "Invalid value ${MSVC_CRT_TYPE} for MSVC_CRT_TYPE, choose one of /MT,/MTd,/MD,/MDd ")
   ENDIF()
 
-  IF(MSVC_CRT_TYPE MATCHES "/MD")
-   # Dynamic runtime (DLLs), need to install CRT libraries.
-   SET(CMAKE_INSTALL_SYSTEM_RUNTIME_COMPONENT VCCRT)
-   SET(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_NO_WARNINGS TRUE)
-   IF(MSVC_CRT_TYPE STREQUAL "/MDd")
-     SET (CMAKE_INSTALL_DEBUG_LIBRARIES_ONLY TRUE)
-   ENDIF()
-   INCLUDE(InstallRequiredSystemLibraries)
-  ENDIF()
-
   IF(WITH_ASAN AND (NOT CLANG_CL))
     SET(DYNAMIC_UCRT_LINK_DEFAULT OFF)
   ELSE()
@@ -349,6 +339,44 @@ ENDIF()
 
 SET(FN_NO_CASE_SENSE 1)
 SET(USE_SYMDIR 1)
+
+MACRO(WIN_INSTALL_RUNTIME_DEPENDENCIES)
+  CMAKE_PATH(GET CMAKE_C_COMPILER PARENT_PATH compiler_dir)
+  INSTALL(
+    RUNTIME_DEPENDENCY_SET
+    RuntimeDeps
+    COMPONENT RuntimeDeps
+    PRE_EXCLUDE_REGEXES
+    "api-ms-"
+    "ext-ms-" # magic to exclude MS .dlls
+    "server.dll"
+    POST_EXCLUDE_REGEXES
+    ".*system32/.*\\.dll"
+    ${CMAKE_BINARY_DIR}
+    POST_INCLUDE_REGEXES
+    ".*system32/vcruntime"
+    ".*system32/msvc"
+    DIRECTORIES
+    ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin
+    ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/debug/bin
+    ${compiler_dir}
+  )
+  IF(VCPKG_INSTALLED_DIR)
+    CMAKE_PATH(IS_PREFIX  CMAKE_BINARY_DIR "${VCPKG_INSTALLED_DIR}" NORMALIZE IS_VCPKG_MANIFEST_MODE)
+    IF(IS_VCPKG_MANIFEST_MODE)
+     INSTALL(DIRECTORY ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin/
+       DESTINATION bin
+       CONFIGURATIONS Release RelWithDebInfo MinSizeRel
+       COMPONENT RuntimeDeps
+       FILES_MATCHING PATTERN "*.dll")
+     INSTALL(DIRECTORY ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/debug/bin/
+       DESTINATION bin
+       CONFIGURATIONS Debug
+       COMPONENT RuntimeDeps
+       FILES_MATCHING PATTERN "*.dll")
+    ENDIF()
+  ENDIF()
+ENDMACRO()
 
 # Force static C runtime for targets in current directory
 # (useful to get rid of MFC dll's dependency, or in installer)
