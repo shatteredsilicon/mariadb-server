@@ -1388,7 +1388,7 @@ public:
     }
     return update_fl;
   }
-  virtual void store_field_value(uchar *val, uint len)
+  virtual void store_field_value(uchar *val, size_t len)
   {
      memcpy(ptr, val, len);
   }
@@ -5110,7 +5110,7 @@ public:
     }
     return update_fl;
   }
-  void store_field_value(uchar *val, uint) override
+  void store_field_value(uchar *val, size_t) override
   {
     store(*((longlong *)val), TRUE);
   }
