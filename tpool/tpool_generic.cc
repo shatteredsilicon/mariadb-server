@@ -308,6 +308,7 @@ public:
   void wait_begin() override;
   void wait_end() override;
   void submit_task(task *task) override;
+  void drain() override;
   aio *create_native_aio(int max_io) override
   {
 #ifdef _WIN32
@@ -889,6 +890,18 @@ void thread_pool_generic::submit_task(task* task)
   maybe_wake_or_create_thread();
 }
 
+void thread_pool_generic::drain()
+{
+  for (;;)
+  {
+    {
+      std::unique_lock<std::mutex> lk(m_mtx);
+      if (!m_task_queue.empty())
+        break;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+}
 
 /* Notify thread pool that current thread is going to wait */
 void thread_pool_generic::wait_begin()

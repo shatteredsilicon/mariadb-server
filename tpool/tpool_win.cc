@@ -237,6 +237,10 @@ public:
     if (max_threads)
       SetThreadpoolThreadMaximum(m_ptp_pool, max_threads);
   }
+  void drain()
+  {
+    CloseThreadpoolCleanupGroupMembers(m_cleanup, FALSE, NULL);
+  }
   ~thread_pool_win()
   {
     CloseThreadpoolCleanupGroupMembers(m_cleanup, TRUE, NULL);

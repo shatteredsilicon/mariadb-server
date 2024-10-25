@@ -92,22 +92,22 @@ struct table_load_params
   bool is_view= false;   /* true if the script is for a VIEW */
   std::vector<std::string> triggers; /* CREATE TRIGGER statements */
   ulonglong size= 0;     /* size of the data file */
-  std::string sql_text;   /* content of the SQL file, without triggers */
-  TableDDLInfo _ddl_info; /* parsed CREATE TABLE statement */
+  std::string sql_text;  /* content of the SQL file, without triggers */
+  TableDDLInfo ddl_info; /* parsed CREATE TABLE statement */
 
   table_load_params(const char* dfile, const char* sqlfile,
     const char* db, ulonglong data_size)
       : data_file(dfile), sql_file(sqlfile),
         dbname(db), triggers(),
         sql_text(parse_sql_script(sqlfile, &tz_utc, &triggers)),
-        _ddl_info(sql_text),
+        ddl_info(sql_text),
         size(data_size)
   {
-    is_view= _ddl_info.table_name.empty();
+    is_view= ddl_info.table_name.empty();
   }
   int create_table_or_view(MYSQL *);
-  int load(MYSQL *);
-  int post_data_load(MYSQL *);
+  int load_data(MYSQL *);
+  int create_constraints_and_triggers(MYSQL *);
 };
 
 std::unordered_set<std::string> ignore_databases;
@@ -630,7 +630,7 @@ int table_load_params::create_table_or_view(MYSQL* mysql)
   Temporarily drop from table definitions, if --innodb-optimize-keys is given. We'll add them back
   later, after the data is loaded.
 */
-  auto drop_constraints_sql= _ddl_info.drop_constraints_sql();
+  auto drop_constraints_sql= ddl_info.drop_constraints_sql();
   if (!drop_constraints_sql.empty())
   {
     if (exec_sql(mysql, drop_constraints_sql))
@@ -639,7 +639,7 @@ int table_load_params::create_table_or_view(MYSQL* mysql)
   return 0;
 }
 
-int table_load_params::load(MYSQL *mysql)
+int table_load_params::load_data(MYSQL *mysql)
 {
   char tablename[FN_REFLEN], hard_path[FN_REFLEN],
        escaped_name[FN_REFLEN * 2 + 1],
@@ -692,9 +692,9 @@ int table_load_params::load(MYSQL *mysql)
 
 
   bool recreate_secondary_keys= false;
-  if (opt_innodb_optimize_keys && _ddl_info.storage_engine == "InnoDB")
+  if (opt_innodb_optimize_keys && ddl_info.storage_engine == "InnoDB")
   {
-    auto drop_secondary_keys_sql= _ddl_info.drop_secondary_indexes_sql();
+    auto drop_secondary_keys_sql= ddl_info.drop_secondary_indexes_sql();
     if (!drop_secondary_keys_sql.empty())
     {
       recreate_secondary_keys= true;
@@ -756,7 +756,7 @@ int table_load_params::load(MYSQL *mysql)
   if (exec_sql(mysql, std::string("ALTER TABLE ") + full_tablename + " ENABLE KEYS;"))
     DBUG_RETURN(1);
 
-  if (_ddl_info.storage_engine == "MyISAM" || _ddl_info.storage_engine == "Aria")
+  if (ddl_info.storage_engine == "MyISAM" || ddl_info.storage_engine == "Aria")
   {
     /* Avoid "table was not properly closed" warnings */
     if (exec_sql(mysql, std::string("FLUSH TABLE ").append(full_tablename).c_str()))
@@ -764,7 +764,7 @@ int table_load_params::load(MYSQL *mysql)
   }
   if (recreate_secondary_keys)
   {
-    auto create_secondary_keys_sql= _ddl_info.add_secondary_indexes_sql();
+    auto create_secondary_keys_sql= ddl_info.add_secondary_indexes_sql();
     if (!create_secondary_keys_sql.empty())
     {
       if (exec_sql(mysql, create_secondary_keys_sql))
@@ -779,8 +779,16 @@ int table_load_params::load(MYSQL *mysql)
   DBUG_RETURN(0);
 }
 
-int table_load_params::post_data_load(MYSQL* mysql)
+int table_load_params::create_constraints_and_triggers(MYSQL* mysql)
 {
+  if (triggers.empty() &&
+      (!opt_innodb_optimize_keys || ddl_info.storage_engine != "InnoDB"))
+    return 0;
+
+  std::string constraints= ddl_info.add_constraints_sql();
+  if (constraints.empty())
+    return 0;
+
   if (!dbname.empty() && mysql_select_db(mysql, dbname.c_str()))
   {
     db_error(mysql);
@@ -791,10 +799,9 @@ int table_load_params::post_data_load(MYSQL* mysql)
     if (exec_sql(mysql, create_trigger_def))
       return 1;
   }
-  if (opt_innodb_optimize_keys && _ddl_info.storage_engine == "InnoDB")
+  if (opt_innodb_optimize_keys && ddl_info.storage_engine == "InnoDB")
   {
- 
-    std::string constraints= _ddl_info.add_constraints_sql();
+    std::string constraints= ddl_info.add_constraints_sql();
     if (!constraints.empty())
     {
       if (exec_sql(mysql, constraints))
@@ -1038,11 +1045,19 @@ void set_exitcode(int code)
 static thread_local MYSQL *thread_local_mysql;
 
 
-void load_single_table(void *arg)
+static void load_single_table(void *arg)
 {
   int error;
   table_load_params *params= (table_load_params *) arg;
-  if ((error= params->load(thread_local_mysql)))
+  if ((error= params->load_data(thread_local_mysql)))
+    set_exitcode(error);
+}
+
+static void create_constraints_and_triggers(void *arg)
+{
+  int error;
+  table_load_params *params= (table_load_params *) arg;
+  if ((error= params->create_constraints_and_triggers(thread_local_mysql)))
     set_exitcode(error);
 }
 
@@ -1294,13 +1309,22 @@ int main(int argc, char **argv)
     thread_pool= tpool::create_thread_pool_generic(opt_use_threads,opt_use_threads);
     thread_pool->set_thread_callbacks(tpool_thread_init,tpool_thread_exit);
 
-    std::vector<tpool::task> all_tasks;
-    for (const auto &f: files_to_load)
-      all_tasks.push_back(tpool::task(load_single_table, (void *)&f));
+    std::vector<tpool::task> load_tasks;
+    std::vector<tpool::task> post_load_tasks;
+    for (const auto &f : files_to_load)
+    {
+      load_tasks.push_back(tpool::task(load_single_table, (void *) &f));
+      post_load_tasks.push_back(
+          tpool::task(create_constraints_and_triggers, (void *) &f));
+    }
 
-    for (auto &t: all_tasks)
+    for (auto &t: load_tasks)
       thread_pool->submit_task(&t);
 
+    thread_pool->drain();
+
+    for (auto &t : post_load_tasks)
+      thread_pool->submit_task(&t);
     delete thread_pool;
     close_tp_connections();
     thread_pool= nullptr;
@@ -1310,13 +1334,15 @@ int main(int argc, char **argv)
     if (lock_tables)
       lock_table(mysql, argc, argv);
     for (auto &f : files_to_load)
-      if ((error= f.load(mysql)))
+    {
+      if ((error= f.load_data(mysql)))
         set_exitcode(error);
-  }
-  for (auto &f : files_to_load)
-  {
-    if (f.post_data_load(mysql))
-      set_exitcode(1);
+    }
+    for (auto &f : files_to_load)
+    {
+      if ((error= f.create_constraints_and_triggers(mysql)))
+        set_exitcode(error);
+    }
   }
   safe_exit(0, 0);
   return(exitcode);

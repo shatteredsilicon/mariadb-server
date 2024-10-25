@@ -283,7 +283,8 @@ public:
   by calling set_concurrency(0).
   */
   virtual void set_concurrency(unsigned int threads=0){}
-
+  /* Wait for currently submitted tasks to finish */
+  virtual void drain()= 0;
   int bind(native_file_handle &fd) { return m_aio->bind(fd); }
   void unbind(const native_file_handle &fd) { if (m_aio) m_aio->unbind(fd); }
   int submit_io(aiocb *cb) { return m_aio->submit_io(cb); }
