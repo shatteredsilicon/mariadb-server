@@ -2564,6 +2564,7 @@ public:
   bool write(Log_event_writer *writer) override;
 #ifdef HAVE_REPLICATION
   void pack_info(Protocol* protocol) override;
+  bool to_packet(String *packet);
 #endif /* HAVE_REPLICATION */
 #else
   bool print(FILE* file, PRINT_EVENT_INFO* print_event_info) override;
