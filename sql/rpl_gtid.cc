@@ -3315,6 +3315,7 @@ struct gtid_report_ctx
   my_bool contains_err;
 };
 
+/** Iteration block for Binlog_gtid_state_validator::report */
 static my_bool report_audit_findings(void *entry, void *report_ctx_arg)
 {
   struct Binlog_gtid_state_validator::audit_elem *audit_el=

@@ -663,15 +663,6 @@ public:
     m_stop= {0, 0, 0};
   }
 
-protected:
-
-  /*
-    When processing GTID streams, the order in which they are processed should
-    be sequential with no gaps between events. If a gap is found within a
-    window, warn the user.
-  */
-  void verify_gtid_is_expected(rpl_gtid *gtid);
-
 private:
 
   enum warning_flags
