@@ -88,7 +88,7 @@ Unique::Unique(Keys_descriptor *desc,
    keys_descriptor(desc)
 {
   my_b_clear(&file);
-  init_tree(&tree, (max_in_memory_size / 16), 0, 0, unique_compare_keys,
+  init_tree(&tree, MY_MIN(max_in_memory_size / 16, UINT32_MAX), 0, 0, unique_compare_keys,
             NULL, desc, MYF(MY_THREAD_SPECIFIC));
   /* If the following fails the next add will also fail */
   my_init_dynamic_array(PSI_INSTRUMENT_ME, &file_ptrs, sizeof(Merge_chunk), 16,
@@ -306,7 +306,8 @@ static double get_merge_many_buffs_cost(THD *thd,
       these will be random seeks.
 */
 
-double Unique::get_use_cost(uint *buffer, size_t nkeys, uint key_size,
+double Unique::get_use_cost(THD *thd,
+                            uint *buffer, size_t nkeys, uint key_size,
                             size_t max_in_memory_size,
                             double compare_factor,
                             bool intersect_fl, bool *in_memory)

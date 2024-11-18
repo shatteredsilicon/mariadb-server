@@ -36,7 +36,60 @@
 #include "debug_sync.h"
 #include "sql_queue.h"
 
-static uint make_sortkey(Sort_param *, uchar *, uchar *, bool);
+static uint make_sortkey(Sort_param *, uchar *, uchar *);
+
+class Bounded_queue
+{
+public:
+
+  int init(ha_rows max_elements, size_t cmplen, Sort_param *sort_param,
+           uchar **sort_keys);
+  void push(uchar *element);
+  size_t num_elements() const { return m_queue.elements(); }
+  bool is_initialized() const { return m_queue.is_inited(); }
+
+private:
+  uchar                     **m_sort_keys;
+  size_t                      m_compare_length;
+  Sort_param                 *m_sort_param;
+  Queue<uchar*, size_t> m_queue;
+};
+
+
+int Bounded_queue::init(ha_rows max_elements, size_t cmplen,
+                        Sort_param *sort_param, uchar **sort_keys)
+{
+  DBUG_ASSERT(sort_keys != NULL);
+
+  m_sort_keys=      sort_keys;
+  m_compare_length= cmplen;
+  m_sort_param=     sort_param;
+  // init_queue() takes an uint, and also does (max_elements + 1)
+  if (max_elements >= UINT_MAX - 1)
+    return 1;
+  // We allocate space for one extra element, for replace when queue is full.
+  return m_queue.init((uint)max_elements + 1, true,
+                      (decltype(m_queue)::Queue_compare)get_ptr_compare(cmplen),
+                      &m_compare_length);
+}
+
+
+void Bounded_queue::push(uchar *element)
+{
+  DBUG_ASSERT(is_initialized());
+  if (m_queue.is_full())
+  {
+    // Replace top element with new key, and re-order the queue.
+    uchar **pq_top= m_queue.top();
+    make_sortkey(m_sort_param, *pq_top, element);
+    m_queue.propagate_top();
+  } else {
+    // Insert new key into the queue.
+    make_sortkey(m_sort_param, m_sort_keys[m_queue.elements()], element);
+    m_queue.push(&m_sort_keys[m_queue.elements()]);
+  }
+}
+
 
 static uchar *read_buffpek_from_file(IO_CACHE *buffer_file, uint count,
                                      uchar *buf);
@@ -44,7 +97,7 @@ static ha_rows find_all_keys(THD *thd, Sort_param *param, SQL_SELECT *select,
                              SORT_INFO *fs_info,
                              IO_CACHE *buffer_file,
                              IO_CACHE *tempfile,
-                             Bounded_queue<uchar, uchar> *pq,
+                             Bounded_queue *pq,
                              ha_rows *found_rows);
 static bool write_keys(Sort_param *param, SORT_INFO *fs_info,
                       uint count, IO_CACHE *buffer_file, IO_CACHE *tempfile);
