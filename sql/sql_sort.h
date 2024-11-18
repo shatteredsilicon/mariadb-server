@@ -318,12 +318,7 @@ public:
     size_of_packable_fields+= len;
   }
 
-  void increment_original_sort_length(uint len)
-  {
-    sort_length_with_original_values+= len;
-  }
-
-  uint compute_sort_length(THD *thd, bool *allow_packing_for_sortkeys);
+  uint sort_length(THD *thd, bool *allow_packing_for_sortkeys);
 
   bool is_parameters_computed() const { return parameters_computed; }
   int compare_keys(const uchar *a, const uchar *b) const;

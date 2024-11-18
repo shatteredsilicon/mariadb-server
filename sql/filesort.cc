@@ -314,7 +314,7 @@ SORT_INFO *filesort(THD *thd, TABLE *table, Filesort *filesort,
   sort->found_rows= HA_POS_ERROR;
 
   param.sort_keys= sort_keys;
-  sort_len= sort_keys->compute_sort_length(thd, &allow_packing_for_sortkeys);
+  sort_len= sort_keys->sort_length(thd, &allow_packing_for_sortkeys);
   param.init_for_filesort(table, filesort, sort_len, limit_rows);
   if (!param.accepted_rows)
     param.accepted_rows= &not_used;
@@ -2211,12 +2211,9 @@ Type_handler_decimal_result::sort_length(THD *thd,
 */
 
 uint
-Sort_keys::compute_sort_length(THD *thd, bool *allow_packing_for_sortkeys)
+Sort_keys::sort_length(THD *thd, bool *allow_packing_for_sortkeys)
 {
-  uint length;
-  *allow_packing_for_sortkeys= true;
-
-  length=0;
+  uint length= 0;
   uint nullable_cols=0;
 
   if (parameters_computed)
@@ -2225,56 +2222,12 @@ Sort_keys::compute_sort_length(THD *thd, bool *allow_packing_for_sortkeys)
     return sort_length_with_memcmp_values;
   }
 
+  *allow_packing_for_sortkeys= true;
   for (SORT_FIELD *sortorder= begin(); sortorder != end(); sortorder++)
   {
-    sortorder->suffix_length= 0;
-    sortorder->length_bytes= 0;
-    if (sortorder->field)
-    {
-      Field *field= sortorder->field;
-      CHARSET_INFO *cs= sortorder->field->sort_charset();
-      sortorder->type= field->is_packable() ?
-                       SORT_FIELD_ATTR::VARIABLE_SIZE :
-                       SORT_FIELD_ATTR::FIXED_SIZE;
-      sortorder->set_length_and_original_length(thd, field->sort_length());
-      sortorder->suffix_length= sortorder->field->sort_suffix_length();
-      sortorder->cs= cs;
-
-      if (use_strnxfrm((cs=sortorder->field->sort_charset())))
-        sortorder->length= (uint) cs->strnxfrmlen(sortorder->length);
-
-      if ((sortorder->maybe_null= sortorder->field->maybe_null()))
-        nullable_cols++;				// Place for NULL marker
-    }
-    else
-    {
-      sortorder->type= sortorder->item->type_handler()->is_packable() ?
-                       SORT_FIELD_ATTR::VARIABLE_SIZE :
-                       SORT_FIELD_ATTR::FIXED_SIZE;
-      sortorder->item->type_handler()->sort_length(thd, sortorder->item,
-                                                   sortorder);
-      sortorder->cs= sortorder->item->collation.collation;
-
-      if ((sortorder->maybe_null= sortorder->item->maybe_null()))
-        nullable_cols++;				// Place for NULL marker
-    }
-
-    if (sortorder->is_variable_sized())
-    {
-      *allow_packing_for_sortkeys&= sortorder->check_if_packing_possible(thd);
-
-      set_if_smaller(sortorder->length, thd->variables.max_sort_length);
-      set_if_smaller(sortorder->original_length, thd->variables.max_sort_length);
-      sortorder->length_bytes=
-        number_storage_requirement(sortorder->original_length);
-    }
-    // TODO(cvicentiu) this flag should be set by calling setup_key_part, as
-    // happens in uniques.cc,
-    // but for filesort we'll manually set it here to true.
-    //
-    // GConcat fields might be different so these need to be tested.
-    sortorder->is_mem_comparable= true;
-    sortorder->setup_key_cmp_function();
+    *allow_packing_for_sortkeys&=
+        sortorder->setup_sort_field_length(thd);
+    nullable_cols+= sortorder->maybe_null;
 
     DBUG_ASSERT(length < UINT_MAX32 - sortorder->length);
     length+= sortorder->length;
@@ -2923,6 +2876,52 @@ int SORT_FIELD::compare_keys(const uchar *a, size_t *a_len,
   return result;
 }
 
+
+bool SORT_FIELD::setup_sort_field_length(THD *thd)
+{
+  bool allow_packing= true;
+  suffix_length= 0;
+  length_bytes= 0;
+  if (field)
+  {
+    type= field->is_packable() ? SORT_FIELD_ATTR::VARIABLE_SIZE
+                               : SORT_FIELD_ATTR::FIXED_SIZE;
+    length= original_length= field->sort_length();
+    if (is_variable_sized())
+      set_if_smaller(length, thd->variables.max_sort_length);
+    suffix_length= field->sort_suffix_length();
+    cs= field->sort_charset();
+
+    if (use_strnxfrm(cs))
+      length= (uint) cs->strnxfrmlen(length);
+    maybe_null= field->maybe_null();
+  }
+  else
+  {
+    type= item->type_handler()->is_packable() ? SORT_FIELD_ATTR::VARIABLE_SIZE
+                                              : SORT_FIELD_ATTR::FIXED_SIZE;
+    item->type_handler()->sort_length(thd, item, this);
+    cs= item->collation.collation;
+    maybe_null= item->maybe_null();
+  }
+
+  if (is_variable_sized())
+  {
+    allow_packing= check_if_packing_possible(thd);
+    set_if_smaller(length, thd->variables.max_sort_length);
+    set_if_smaller(original_length, thd->variables.max_sort_length);
+    length_bytes= number_storage_requirement(original_length);
+  }
+
+  // TODO(cvicentiu) this flag should be set by calling setup_key_part, as
+  // happens in uniques.cc,
+  // but for filesort we'll manually set it here to true.
+  //
+  // GConcat fields might be different so these need to be tested.
+  is_mem_comparable= true;
+  setup_key_cmp_function();
+  return allow_packing;
+}
 
 int SORT_FIELD::compare_packed_varstrings(const SORT_FIELD *sort_field,
                                           const uchar *a, size_t *a_len,
