@@ -7415,8 +7415,6 @@ struct SORT_FIELD_ATTR
   */
   uint length_bytes;
 
-  /* Max. length of the original value, in bytes */
-  uint original_length;
   bool is_mem_comparable; /* use memcmp or field->cmp for comparison. */
   enum Type { FIXED_SIZE, VARIABLE_SIZE } type;
   /*
@@ -7427,9 +7425,8 @@ struct SORT_FIELD_ATTR
   CHARSET_INFO *cs;
   uint pack_sort_string(uchar *to, const Binary_string *str,
                         CHARSET_INFO *cs) const;
-  bool check_if_packing_possible(THD *thd) const;
   bool is_variable_sized() const { return type == VARIABLE_SIZE; }
-  void set_length_and_original_length(THD *thd, uint length_arg);
+  void set_length(THD *thd, uint length_arg);
   void setup_key_part(Field *fld, bool is_mem_comparable);
 };
 
