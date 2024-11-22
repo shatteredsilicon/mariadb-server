@@ -1,3 +1,4 @@
+--disable_view_protocol
 CREATE TABLE t (c INT);
 SHOW CREATE TABLE t;
 FLUSH TABLES WITH READ LOCK;
@@ -9,3 +10,4 @@ SELECT * FROM t;
 --source include/restart_mysqld.inc
 
 DROP TABLE t;
+--enable_view_protocol

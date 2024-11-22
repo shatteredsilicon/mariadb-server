@@ -1,3 +1,4 @@
+--disable_view_protocol
 --echo #
 --echo # MDEV-28993 Spider: Push down CASE statement
 --echo #
@@ -48,3 +49,4 @@ drop server srv;
 --echo #
 --echo # end of test pushdown_case
 --echo #
+--enable_view_protocol

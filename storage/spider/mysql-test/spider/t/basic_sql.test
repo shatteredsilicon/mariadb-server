@@ -1,3 +1,4 @@
+--disable_view_protocol
 # This test tests by executing basic SQL
 --disable_warnings
 --disable_query_log
@@ -2712,3 +2713,4 @@ if ($USE_CHILD_GROUP2)
 --enable_warnings
 --echo
 --echo end of test
+--enable_view_protocol

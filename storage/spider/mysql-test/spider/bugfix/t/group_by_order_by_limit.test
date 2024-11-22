@@ -1,3 +1,4 @@
+--disable_view_protocol
 --source ../include/group_by_order_by_limit_init.inc
 --echo
 --echo this test is for MDEV-16520
@@ -102,3 +103,4 @@ SET GLOBAL log_output = @old_log_output;
 --source ../include/group_by_order_by_limit_deinit.inc
 --echo
 --echo end of test
+--enable_view_protocol

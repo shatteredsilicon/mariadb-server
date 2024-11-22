@@ -1,3 +1,4 @@
+--disable_view_protocol
 --source ../include/direct_sql_with_comma_pwd_init.inc
 --echo
 --echo drop and create databases
@@ -35,3 +36,4 @@ DROP DATABASE IF EXISTS auto_test_local;
 --source ../include/direct_sql_with_comma_pwd_deinit.inc
 --echo
 --echo end of test
+--enable_view_protocol

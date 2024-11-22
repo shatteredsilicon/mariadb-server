@@ -1,3 +1,4 @@
+--disable_view_protocol
 --echo #
 --echo # MDEV-27172 Prefix indices on Spider tables may lead to wrong query results
 --echo #
@@ -92,3 +93,4 @@ DROP DATABASE auto_test_local;
 --source ../../t/test_deinit.inc
 --enable_result_log
 --enable_query_log
+--enable_view_protocol

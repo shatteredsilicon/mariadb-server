@@ -1,3 +1,4 @@
+--disable_view_protocol
 --echo #
 --echo # MDEV-31338 UBSAN: runtime error: member access within null pointer of type 'struct SPIDER_FIELD_CHAIN' and SIGSEGV in spider_db_open_item_ident on SELECT
 --echo #
@@ -22,3 +23,4 @@ drop server srv;
 --source ../../t/test_deinit.inc
 --enable_result_log
 --enable_query_log
+--enable_view_protocol

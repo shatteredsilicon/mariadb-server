@@ -1,3 +1,4 @@
+--disable_view_protocol
 --source ../include/quick_mode_2_init.inc
 --echo
 --echo drop and create databases
@@ -298,3 +299,4 @@ if ($USE_CHILD_GROUP2)
 --source ../include/quick_mode_2_deinit.inc
 --echo
 --echo end of test
+--enable_view_protocol

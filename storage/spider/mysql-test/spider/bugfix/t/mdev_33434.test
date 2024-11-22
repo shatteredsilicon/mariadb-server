@@ -1,3 +1,4 @@
+--disable_view_protocol
 --echo #
 --echo # MDEV-33434 MDEV-33434 UBSAN null pointer passed as argument 2, which is declared to never be null in spider_udf_direct_sql_create_conn
 --echo #
@@ -13,3 +14,4 @@ SELECT SPIDER_DIRECT_SQL('SELECT SLEEP(1)', '', 'srv "dummy", port "3307"');
 --echo #
 --echo # end of test mdev_33434
 --echo #
+--enable_view_protocol

@@ -1,4 +1,6 @@
+--disable_view_protocol
 # Same as udf_mysql_func_early.test, except that we load spider in
 # init_file, which is after udf_init() and before
 # mysqld_server_started is on.
 --source udf_mysql_func_early.test
+--enable_view_protocol

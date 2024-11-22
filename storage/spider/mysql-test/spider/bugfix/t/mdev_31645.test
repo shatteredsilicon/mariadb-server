@@ -1,3 +1,4 @@
+--disable_view_protocol
 --echo #
 --echo # MDEV-31645 Spider doesn't recognize semi JOIN
 --echo #
@@ -25,3 +26,4 @@ drop server srv;
 --echo #
 --echo # end of test mdev_31645
 --echo #
+--enable_view_protocol

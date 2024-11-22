@@ -1,3 +1,4 @@
+--disable_view_protocol
 --echo #
 --echo # Test that udf created by inserting into mysql_func works as expected
 --echo #
@@ -46,3 +47,4 @@ DROP DATABASE IF EXISTS auto_test_local;
  
 --connection child2_1
 DROP DATABASE IF EXISTS auto_test_remote;
+--enable_view_protocol

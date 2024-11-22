@@ -1,3 +1,4 @@
+--disable_view_protocol
 --source ../include/partition_join_pushdown_for_single_partition_init.inc
 if (!$HAVE_PARTITION)
 {
@@ -222,3 +223,4 @@ if ($USE_CHILD_GROUP2)
 --source ../include/partition_join_pushdown_for_single_partition_deinit.inc
 --echo
 --echo end of test
+--enable_view_protocol

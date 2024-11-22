@@ -1,3 +1,4 @@
+--disable_view_protocol
 --source ../include/slave_trx_isolation_init.inc
 --echo
 --echo drop and create databases
@@ -149,3 +150,4 @@ if ($USE_CHILD_GROUP2)
 --source ../include/slave_trx_isolation_deinit.inc
 --echo
 --echo end of test
+--enable_view_protocol

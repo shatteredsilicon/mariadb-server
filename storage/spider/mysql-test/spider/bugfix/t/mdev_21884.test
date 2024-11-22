@@ -1,3 +1,4 @@
+--disable_view_protocol
 --source ../include/mdev_21884_init.inc
 --echo
 --echo this test is for MDEV-21884
@@ -103,3 +104,4 @@ SET GLOBAL log_output = @old_log_output;
 --source ../include/mdev_21884_deinit.inc
 --echo
 --echo end of test
+--enable_view_protocol

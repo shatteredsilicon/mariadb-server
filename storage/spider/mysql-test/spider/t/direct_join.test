@@ -1,3 +1,4 @@
+--disable_view_protocol
 --source ../include/direct_join_init.inc
 
 --echo
@@ -345,3 +346,4 @@ if ($USE_CHILD_GROUP2)
 --source ../include/direct_join_deinit.inc
 --echo
 --echo end of test
+--enable_view_protocol

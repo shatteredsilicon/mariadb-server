@@ -1,3 +1,4 @@
+--disable_view_protocol
 --source ../include/load_data_part_ddi1_init.inc
 --let COMMAND_BEFORE_LOAD_DATA= UPDATE tbl_a SET val = val + 1
 --let OPTION_LOCAL= LOCAL
@@ -6,3 +7,4 @@
 --source ../include/load_data_part_ddi1_deinit.inc
 --echo
 --echo end of test
+--enable_view_protocol

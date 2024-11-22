@@ -1,3 +1,4 @@
+--disable_view_protocol
 --echo #
 --echo # MDEV-29502 ASAN: heap-buffer-overflow & stack-buffer-overflow in spider_db_mbase_row::append_to_str | SIGSEGV's in __memmove_avx_unaligned_erms from memcpy in Binary_string::q_append, in Static_binary_string::q_append and my_strntoull10rnd_8bit | Unknown error 12801
 --echo #
@@ -66,3 +67,4 @@ eval DROP SERVER $srv;
 --source ../../t/test_deinit.inc
 --enable_result_log
 --enable_query_log
+--enable_view_protocol

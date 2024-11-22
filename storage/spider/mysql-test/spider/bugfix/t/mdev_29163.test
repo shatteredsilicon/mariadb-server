@@ -1,3 +1,4 @@
+--disable_view_protocol
 --echo #
 --echo # MDEV-29163 Server crash with SIGSEGV or dynamic-stack-buffer-overflow in spider_db_mbase_util::append_table
 --echo #
@@ -30,3 +31,4 @@ drop server s;
 --echo #
 --echo # end of test mdev_29163
 --echo #
+--enable_view_protocol

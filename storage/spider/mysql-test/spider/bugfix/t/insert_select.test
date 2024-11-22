@@ -1,3 +1,4 @@
+--disable_view_protocol
 --source ../include/insert_select_init.inc
 --echo
 --echo this test is for MDEV-16399
@@ -99,3 +100,4 @@ SET GLOBAL log_output = @old_log_output;
 --source ../include/insert_select_deinit.inc
 --echo
 --echo end of test
+--enable_view_protocol

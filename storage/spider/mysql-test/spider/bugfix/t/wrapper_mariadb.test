@@ -1,3 +1,4 @@
+--disable_view_protocol
 --source ../include/wrapper_mariadb_init.inc
 --echo
 --echo this test is for MDEV-18313
@@ -71,3 +72,4 @@ SET GLOBAL log_output = @old_log_output;
 --source ../include/wrapper_mariadb_deinit.inc
 --echo
 --echo end of test
+--enable_view_protocol

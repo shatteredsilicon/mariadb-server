@@ -1,5 +1,7 @@
+--disable_view_protocol
 --source ../include/delete_with_float_column_mariadb_init.inc
 --source delete_with_float_column.inc
 --source ../include/delete_with_float_column_mariadb_deinit.inc
 --echo
 --echo end of test
+--enable_view_protocol

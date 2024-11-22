@@ -1,3 +1,4 @@
+--disable_view_protocol
 --source ../include/slave_trx_isolation_init.inc
 --echo
 --echo drop and create databases
@@ -97,3 +98,4 @@ SET GLOBAL log_output = @old_log_output;
 --source ../include/slave_trx_isolation_deinit.inc
 --echo
 --echo end of test
+--enable_view_protocol

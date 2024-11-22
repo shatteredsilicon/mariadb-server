@@ -1,3 +1,4 @@
+--disable_view_protocol
 --source ../include/return_found_rows_update_init.inc
 --echo
 --echo this test is for MDEV-18973
@@ -78,3 +79,4 @@ SET GLOBAL log_output = @old_log_output;
 --source ../include/return_found_rows_update_deinit.inc
 --echo
 --echo end of test
+--enable_view_protocol

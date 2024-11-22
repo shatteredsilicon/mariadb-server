@@ -1,3 +1,4 @@
+--disable_view_protocol
 --echo #
 --echo # MDEV-29008 Server crash or assertion `field' failed in spider_db_open_item_ident / group by handler
 --echo #
@@ -50,3 +51,4 @@ DROP DATABASE IF EXISTS auto_test_remote;
 --source ../t/test_deinit.inc
 --enable_query_log
 --enable_result_log
+--enable_view_protocol

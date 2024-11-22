@@ -1,3 +1,4 @@
+--disable_view_protocol
 --echo #
 --echo # MDEV-30392 Syntax error upon query with subquery from Spider table
 --echo #
@@ -27,3 +28,4 @@ DROP SERVER srv;
 --echo #
 --echo # end of test mdev_30392
 --echo #
+--enable_view_protocol

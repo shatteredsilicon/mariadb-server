@@ -1,3 +1,4 @@
+--disable_view_protocol
 --source ../include/quick_mode_2_init.inc
 --echo
 --echo this test is for MDEV-16520
@@ -156,3 +157,4 @@ SET GLOBAL log_output = @old_log_output;
 --source ../include/quick_mode_2_deinit.inc
 --echo
 --echo end of test
+--enable_view_protocol

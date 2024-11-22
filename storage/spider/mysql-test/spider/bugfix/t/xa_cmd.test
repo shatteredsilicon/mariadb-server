@@ -1,3 +1,4 @@
+--disable_view_protocol
 --source ../include/xa_cmd_init.inc
 --echo
 --echo this test is for MDEV-19794
@@ -69,3 +70,4 @@ SET GLOBAL log_output = @old_log_output;
 --source ../include/xa_cmd_deinit.inc
 --echo
 --echo end of test
+--enable_view_protocol

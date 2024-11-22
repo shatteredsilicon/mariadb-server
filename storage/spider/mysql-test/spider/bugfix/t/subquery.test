@@ -1,3 +1,4 @@
+--disable_view_protocol
 --echo #
 --echo # Test spider select with subqueries
 --echo #
@@ -29,3 +30,4 @@ drop server srv;
 --echo #
 --echo # end of test subquery
 --echo #
+--enable_view_protocol

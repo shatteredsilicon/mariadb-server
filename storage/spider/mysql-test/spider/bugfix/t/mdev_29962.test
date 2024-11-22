@@ -1,3 +1,4 @@
+--disable_view_protocol
 --echo #
 --echo # MDEV-29962 SIGSEGV in ha_spider::lock_tables on BEGIN after table lock
 --echo #
@@ -28,3 +29,4 @@ drop server srv;
 --echo #
 --echo # end of test mdev_29962
 --echo #
+--enable_view_protocol

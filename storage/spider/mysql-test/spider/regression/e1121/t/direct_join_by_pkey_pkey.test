@@ -1,3 +1,4 @@
+--disable_view_protocol
 --source ../include/direct_join_by_pkey_pkey_init.inc
 --echo
 --echo this test is for MDEV-18995
@@ -86,3 +87,4 @@ SET GLOBAL log_output = @old_log_output;
 --source ../include/direct_join_by_pkey_pkey_deinit.inc
 --echo
 --echo end of test
+--enable_view_protocol

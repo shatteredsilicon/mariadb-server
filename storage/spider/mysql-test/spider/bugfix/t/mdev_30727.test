@@ -1,3 +1,4 @@
+--disable_view_protocol
 CREATE FUNCTION spider_direct_sql RETURNS INT SONAME 'ha_spider.so';
 --error ER_CANT_INITIALIZE_UDF
 SELECT spider_direct_sql ('SELECT * FROM s','a','srv "b"');
@@ -28,3 +29,4 @@ SELECT spider_flush_table_mon_cache ();
 
 --disable_query_log
 --source ../../include/clean_up_spider.inc
+--enable_view_protocol
