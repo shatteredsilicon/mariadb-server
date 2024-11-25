@@ -1910,6 +1910,8 @@ int ha_commit_trans(THD *thd, bool all)
     if (run_wsrep_hooks && !error)
       error= wsrep_after_commit(thd, all) ? 2 : 0;
 #endif /* WITH_WSREP */
+    if (error)
+      goto err;
     goto done;
   }
 
@@ -1942,6 +1944,8 @@ int ha_commit_trans(THD *thd, bool all)
   if (!is_real_trans)
   {
     error= commit_one_phase_2(thd, all, trans, is_real_trans);
+    if (error)
+      goto err;
     goto done;
   }
 
@@ -2145,7 +2149,7 @@ commit_one_phase_2(THD *thd, bool all, THD_TRANS *trans, bool is_real_trans)
 
   if (ha_info)
   {
-    int err;
+    int err= 0;
 
     if (has_binlog_hton(ha_info) &&
         (err= binlog_commit(thd, all,
@@ -2153,6 +2157,8 @@ commit_one_phase_2(THD *thd, bool all, THD_TRANS *trans, bool is_real_trans)
     {
       my_error(ER_ERROR_DURING_COMMIT, MYF(0), err);
       error= 1;
+
+      goto err;
     }
     for (; ha_info; ha_info= ha_info_next)
     {
@@ -2188,7 +2194,7 @@ commit_one_phase_2(THD *thd, bool all, THD_TRANS *trans, bool is_real_trans)
     if (count >= 2)
       statistic_increment(transactions_multi_engine, LOCK_status);
   }
-
+ err:
   DBUG_RETURN(error);
 }
 
