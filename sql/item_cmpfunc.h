@@ -619,6 +619,7 @@ public:
     }
     return clone;
   }
+  Item* vcol_subst_transformer(THD *thd, uchar *arg) override;
 };
 
 /**
@@ -1068,6 +1069,8 @@ public:
   longlong val_int_cmp_int();
   longlong val_int_cmp_real();
   longlong val_int_cmp_decimal();
+
+  Item* vcol_subst_transformer(THD *thd, uchar *arg) override;
 };
 
 
@@ -2680,6 +2683,8 @@ public:
   Item *in_predicate_to_equality_transformer(THD *thd, uchar *arg) override;
   uint32 max_length_of_left_expr();
   Item* varchar_upper_cmp_transformer(THD *thd, uchar *arg) override;
+
+  Item* vcol_subst_transformer(THD *thd, uchar *arg) override;
 };
 
 class cmp_item_row :public cmp_item
@@ -2762,6 +2767,8 @@ public:
     return FALSE;
   }
   bool count_sargable_conds(void *arg) override;
+
+  Item* vcol_subst_transformer(THD *thd, uchar *arg) override;
 };
 
 
