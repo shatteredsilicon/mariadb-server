@@ -679,10 +679,11 @@ public:
     void append_args(THD *thd, String *str) const;
 
   private:
+    Opt_hints_qb* resolve_for_qb_name(Parse_context *pc, bool hint_state,
+                                      const Lex_ident_sys *qb_name) const;
     void fill_strategies_map(Opt_hints_qb *qb) const;
     void add_strategy_to_map(TokenID token_id, Opt_hints_qb *qb) const;
-    void append_strategy_name(TokenID token_id, String *str,
-                              int& appended_count) const;
+    void append_strategy_name(TokenID token_id, String *str) const;
   };
 
 private:
@@ -754,6 +755,8 @@ public:
 
   private:
     void set_subquery_strategy(TokenID token_id, Opt_hints_qb *qb) const;
+    Opt_hints_qb* resolve_for_qb_name(Parse_context *pc, TokenID token_id,
+                                     const Lex_ident_sys *qb_name) const;
   };
 
 

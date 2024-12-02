@@ -5997,7 +5997,7 @@ bool st_select_lex::semijoin_enabled(THD *thd) const
   @param thd  Pointer to THD object for session.
               Used to access optimizer_switch
 */
-void st_select_lex::update_semijoin_strategies(THD *thd)
+void st_select_lex::update_available_semijoin_strategies(THD *thd)
 {
   uint sj_strategy_mask= OPTIMIZER_SWITCH_FIRSTMATCH |
     OPTIMIZER_SWITCH_LOOSE_SCAN | OPTIMIZER_SWITCH_MATERIALIZATION |

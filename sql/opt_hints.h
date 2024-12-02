@@ -63,6 +63,7 @@ struct st_opt_hint_info
   bool switch_hint;       // true if hint is not complex.
 };
 
+typedef Optimizer_hint_parser Parser;
 
 /**
   Opt_hints_map contains information
@@ -412,7 +413,7 @@ public:
   */
   uint sj_enabled_strategies(uint opt_switches) const;
 
-  const Optimizer_hint_parser::Semijoin_hint* semijoin_hint= nullptr;
+  const Parser::Semijoin_hint* semijoin_hint= nullptr;
 
   /*
     Bitmap of strategies listed in the SEMIJOIN/NO_SEMIJOIN hint body, e.g.
@@ -420,7 +421,7 @@ public:
   */
   uint semijoin_strategies_map= 0;
 
-  const Optimizer_hint_parser::Subquery_hint *subquery_hint= nullptr;
+  const Parser::Subquery_hint *subquery_hint= nullptr;
   uint subquery_strategy= SUBS_NOT_TRANSFORMED;
 };
 

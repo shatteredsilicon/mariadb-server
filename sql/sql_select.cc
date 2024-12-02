@@ -6279,7 +6279,7 @@ make_join_statistics(JOIN *join, List<TABLE_LIST> &tables_list,
   join->found_const_table_map=found_const_table_map;
 
   if (sj_nests)
-    join->select_lex->update_semijoin_strategies(thd);
+    join->select_lex->update_available_semijoin_strategies(thd);
 
   if (join->const_tables != join->table_count)
     optimize_keyuse(join, keyuse_array);
