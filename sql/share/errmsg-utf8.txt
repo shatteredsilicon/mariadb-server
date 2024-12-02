@@ -12411,3 +12411,6 @@ ER_IB_MSG_CLONE_DDL_APPLY
 
 ER_IB_MSG_CLONE_DDL_INVALIDATE
   eng "Clone DDL Invalidate : %s"
+
+ER_PATH_IN_DATADIR
+  eng "Path is within the current data directory '%-.192s'"
