@@ -146,7 +146,7 @@ CREATE TABLE t1 (p int NOT NULL, a int NOT NULL, PRIMARY KEY (p,a desc));
 insert into t1 select 2,seq from seq_0_to_1000;
 EXPLAIN select MIN(a) from t1 where p = 2 group by p;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	PRIMARY	PRIMARY	4	const	1000	Using index
+1	SIMPLE	t1	range	PRIMARY	PRIMARY	4	NULL	1	Using where; Using index for group-by
 select json_detailed(json_extract(trace, '$**.potential_group_range_indexes')) as jd
 from information_schema.optimizer_trace;
 jd
@@ -154,8 +154,11 @@ jd
     [
         {
             "index": "PRIMARY",
-            "usable": false,
-            "cause": "Reverse-ordered (not supported yet)"
+            "covering": true,
+            "ranges": 
+            ["(2) <= (p) <= (2)"],
+            "rows": 1,
+            "cost": 0.000838227
         }
     ]
 ]

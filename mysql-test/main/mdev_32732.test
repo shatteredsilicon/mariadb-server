@@ -1,0 +1,57 @@
+# cause can be viewed in optimizer trace
+create table t1 (a int, c int, key (a, c desc));
+insert into t1 values (1, 9), (1, 6), (1, 3);
+let $query=
+SELECT MAX(c), MIN(c) FROM t1 group by a;
+eval explain $query;
+eval $query;
+drop table t1;
+
+--source include/have_innodb.inc
+CREATE TABLE t1 (a int, b int, KEY (a, b desc)) engine=innodb;
+insert into t1 values (1, 23), (3, 45), (1, 11), (3, 88), (3, 70), (4, NULL), (1, 14), (4, NULL);
+
+SELECT MIN(b) FROM t1 GROUP BY a;
+SELECT MIN(b) FROM t1 WHERE b < 68 GROUP BY a;
+SELECT MIN(b) FROM t1 WHERE b > 13 GROUP BY a;
+SELECT MIN(b) FROM t1 WHERE b > 13 AND b < 68 GROUP BY a;
+SELECT MIN(b) FROM t1 WHERE (b > 47 AND b < 91) OR (b > 11 AND b < 30) GROUP BY a;
+
+SELECT MAX(b) FROM t1 GROUP BY a;
+SELECT MAX(b) FROM t1 WHERE b < 68 GROUP BY a;
+SELECT MAX(b) FROM t1 WHERE b > 13 GROUP BY a;
+SELECT MAX(b) FROM t1 WHERE b > 13 AND b < 68 GROUP BY a;
+SELECT MAX(b) FROM t1 WHERE (b > 47 AND b < 91) OR (b > 11 AND b < 30) GROUP BY a;
+
+insert into t1 values (4, 8);
+
+SELECT MIN(b) FROM t1 GROUP BY a;
+SELECT MIN(b) FROM t1 WHERE b < 68 GROUP BY a;
+SELECT MIN(b) FROM t1 WHERE b > 13 GROUP BY a;
+SELECT MIN(b) FROM t1 WHERE b > 13 AND b < 68 GROUP BY a;
+SELECT MIN(b) FROM t1 WHERE (b > 47 AND b < 91) OR (b > 11 AND b < 30) GROUP BY a;
+
+SELECT MAX(b) FROM t1 GROUP BY a;
+SELECT MAX(b) FROM t1 WHERE b < 68 GROUP BY a;
+SELECT MAX(b) FROM t1 WHERE b > 13 GROUP BY a;
+SELECT MAX(b) FROM t1 WHERE b > 13 AND b < 68 GROUP BY a;
+SELECT MAX(b) FROM t1 WHERE (b > 47 AND b < 91) OR (b > 11 AND b < 30) GROUP BY a;
+
+drop table t1;
+
+# # copied from main.desc_index_range
+
+# --source include/have_sequence.inc
+# --echo #
+# --echo # Check that "Using index for group-by" is disabled (it's not supported, yet)
+# --echo #
+# CREATE TABLE t1 (p int NOT NULL, a int NOT NULL, PRIMARY KEY (p,a desc));
+# insert into t1 select 2,seq from seq_0_to_1000;
+# EXPLAIN select MIN(a) from t1 where p = 2 group by p;
+# select MIN(a) from t1 where p = 2 group by p;
+# #Enable after fix MDEV-32034
+# --disable_view_protocol
+# select json_detailed(json_extract(trace, '$**.potential_group_range_indexes')) as jd
+# from information_schema.optimizer_trace;
+# --enable_view_protocol
+# drop table t1;
