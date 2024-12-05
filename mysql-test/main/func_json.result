@@ -651,6 +651,8 @@ max_allowed_packet	2048
 select json_array(repeat('a',1024),repeat('a',1024)) as ex;
 ex
 NULL
+Warnings:
+Warning	1301	Result of json_array() was larger than max_allowed_packet (2048) - truncated
 select json_object("a", repeat('a',1024),"b", repeat('a',1024)) as ex;
 ex
 NULL

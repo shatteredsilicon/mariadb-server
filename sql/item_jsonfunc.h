@@ -780,7 +780,6 @@ protected:
   MEM_ROOT_DYNAMIC_ARRAY json_depth_array;
   MEM_ROOT current_mem_root;
   bool mem_root_inited;
-  
 
 public:
   Item_func_json_insert(bool i_mode, bool r_mode, THD *thd, List<Item> &list):

@@ -674,7 +674,8 @@ json_norm_parse(struct json_norm_value *root, json_engine_t *je, MEM_ROOT *curre
       const uchar *key_start = je->s.c_str;
       const uchar *key_end;
       struct json_norm_value* new_val_ptr= NULL;
-      struct json_norm_value** curr_val_ptr = (struct json_norm_value**)mem_root_dynamic_array_get_val(&stack, current);
+      struct json_norm_value** curr_val_ptr =
+            (struct json_norm_value**)mem_root_dynamic_array_get_val(&stack, current);
       struct json_norm_value* curr_val = *curr_val_ptr;
       DBUG_ASSERT(curr_val->type == JSON_VALUE_OBJECT);
 
@@ -683,11 +684,12 @@ json_norm_parse(struct json_norm_value *root, json_engine_t *je, MEM_ROOT *curre
         key_end = je->s.c_str;
       } while (json_read_keyname_chr(je) == 0);
 
-      // Reset the dynstr
+      /* we have the key name */
+      /* reset the dynstr: */
       dynstr_trunc(&key, key.length);
       dynstr_append_mem(&key, (char*)key_start, (key_end - key_start));
 
-      // After reading the key, we have a follow-up value
+      /* After reading the key, we have a follow-up value. */
       err = json_read_value(je);
       if (err)
         goto json_norm_parse_end;
@@ -708,7 +710,8 @@ json_norm_parse(struct json_norm_value *root, json_engine_t *je, MEM_ROOT *curre
     }
     case JST_VALUE:
     {
-      struct json_norm_value** curr_val_ptr = (struct json_norm_value**)mem_root_dynamic_array_get_val(&stack, current);
+      struct json_norm_value** curr_val_ptr =
+             (struct json_norm_value**)mem_root_dynamic_array_get_val(&stack, current);
       struct json_norm_value* curr_val = *curr_val_ptr;
       struct json_norm_array* current_arr = &curr_val->value.array;
 
@@ -725,24 +728,27 @@ json_norm_parse(struct json_norm_value *root, json_engine_t *je, MEM_ROOT *curre
       if (je->value_type == JSON_VALUE_ARRAY ||
           je->value_type == JSON_VALUE_OBJECT)
       {
-        struct json_norm_value* element = json_norm_array_get_last_element(current_arr);
+        struct json_norm_value* element =
+                json_norm_array_get_last_element(current_arr);
         mem_root_dynamic_array_set_val(&stack, &element, ++current);
       }
       break;
     }
     case JST_OBJ_START:
-      // Parser found an object (the '{' in JSON)
+      /* parser found an object (the '{' in JSON) */
       break;
     case JST_OBJ_END:
-      // Parser found the end of the object (the '}' in JSON)
-      --current;  // Pop stack
+      /* parser found the end of the object (the '}' in JSON) */
+      /* pop stack */
+      --current;
       break;
     case JST_ARRAY_START:
-      // Parser found an array (the '[' in JSON)
+     /* parser found an array (the '[' in JSON) */
       break;
     case JST_ARRAY_END:
-      // Parser found the end of the array (the ']' in JSON)
-      --current;  // Pop stack
+      /* parser found the end of the array (the ']' in JSON) */
+      /* pop stack */
+      --current;
       break;
     }
   } while (json_scan_next(je) == 0);
