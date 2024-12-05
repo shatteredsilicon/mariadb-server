@@ -68,9 +68,9 @@ class Json_schema_keyword : public Sql_alloc
                                                const uchar* k_start= NULL,
                                                const uchar* k_end= NULL);
     virtual bool validate_as_alternate(const json_engine_t *je,
-                                               const uchar* k_start= NULL,
-                                               const uchar* k_end= NULL,
-                                               MEM_ROOT *current_mem_root= NULL)
+                                       const uchar* k_start= NULL,
+                                       const uchar* k_end= NULL,
+                                       MEM_ROOT *current_mem_root= NULL)
     {
       return false;
     }
@@ -117,8 +117,10 @@ class Json_schema_additional_and_unevaluated : public Json_schema_keyword
     {
       return false;
     }
-    bool validate_as_alternate(const json_engine_t *je, const uchar *k_start,
-                               const uchar *k_end, MEM_ROOT *current_mem_root) override;
+    bool validate_as_alternate(const json_engine_t *je,
+                               const uchar *k_start,
+                               const uchar *k_end,
+                               MEM_ROOT *current_mem_root) override;
 };
 
 
@@ -196,7 +198,8 @@ class Json_schema_enum : public  Json_schema_keyword
     bool validate(const json_engine_t *je, MEM_ROOT *current_mem_root,
                   const uchar *k_start= NULL,
                   const uchar *k_end= NULL) override;
-    bool handle_keyword(THD *thd, MEM_ROOT *current_mem_root, json_engine_t *je,
+    bool handle_keyword(THD *thd, MEM_ROOT *current_mem_root,
+                        json_engine_t *je,
                         const char* key_start,
                         const char* key_end,
                         List<Json_schema_keyword> *all_keywords) override;
@@ -216,7 +219,8 @@ class Json_schema_maximum : public Json_schema_keyword
     bool validate(const json_engine_t *je, MEM_ROOT *current_mem_root,
                   const uchar *k_start= NULL,
                   const uchar *k_end= NULL) override;
-    bool handle_keyword(THD *thd, MEM_ROOT *current_mem_root, json_engine_t *je,
+    bool handle_keyword(THD *thd, MEM_ROOT *current_mem_root,
+                        json_engine_t *je,
                         const char* key_start,
                         const char* key_end,
                         List<Json_schema_keyword> *all_keywords) override;
@@ -228,7 +232,8 @@ class Json_schema_minimum : public Json_schema_keyword
     bool validate(const json_engine_t *je, MEM_ROOT *current_mem_root,
                   const uchar *k_start= NULL,
                   const uchar *k_end= NULL) override;
-    bool handle_keyword(THD *thd, MEM_ROOT *current_mem_root, json_engine_t *je,
+    bool handle_keyword(THD *thd, MEM_ROOT *current_mem_root,
+                        json_engine_t *je,
                         const char* key_start,
                         const char* key_end,
                         List<Json_schema_keyword> *all_keywords) override;
@@ -477,8 +482,10 @@ class Json_schema_items : public Json_schema_keyword
                         const char* key_start,
                         const char* key_end,
                         List<Json_schema_keyword> *all_keywords) override;
-    bool validate_as_alternate(const json_engine_t *je, const uchar *k_start,
-                           const uchar *k_end, MEM_ROOT *current_mem_root) override;
+    bool validate_as_alternate(const json_engine_t *je,
+                               const uchar *k_start,
+                               const uchar *k_end,
+                               MEM_ROOT *current_mem_root) override;
 };
 
 
@@ -707,7 +714,8 @@ class Json_schema_logic : public Json_schema_keyword
     bool validate(const json_engine_t *je, MEM_ROOT *current_mem_root,
                   const uchar *k_start= NULL,
                   const uchar *k_end= NULL) override;
-    bool handle_keyword(THD *thd, MEM_ROOT *current_mem_root, json_engine_t *je,
+    bool handle_keyword(THD *thd, MEM_ROOT *current_mem_root,
+                        json_engine_t *je,
                         const char* key_start,
                         const char* key_end,
                         List<Json_schema_keyword> *all_keywords) override;

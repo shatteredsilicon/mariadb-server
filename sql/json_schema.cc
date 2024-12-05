@@ -2589,7 +2589,8 @@ bool Json_schema_keyword::validate_schema_items(const json_engine_t *je,
   return false;
 }
 
-bool Json_schema_conditional::validate(const json_engine_t *je, MEM_ROOT *current_mem_root,
+bool Json_schema_conditional::validate(const json_engine_t *je,
+                                       MEM_ROOT *current_mem_root,
                                        const uchar *k_start,
                                        const uchar *k_end)
 {

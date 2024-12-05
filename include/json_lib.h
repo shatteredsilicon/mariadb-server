@@ -10,7 +10,7 @@ extern "C" {
 #define JSON_DEPTH_DEFAULT 32
 #define JSON_DEPTH_LIMIT JSON_DEPTH_DEFAULT /* Still used in column store. */
 /*
- Because this array will store approximate two arrays of 
+ Because this array will store approximate two arrays of
  type json_path_step_t and one or two integer arrays,
  each of average 70 elements. So this size should suffice.
 */
@@ -112,7 +112,7 @@ typedef struct st_json_path_t
 {
   json_string_t s;  /* The string to be parsed. */
   MEM_ROOT_DYNAMIC_ARRAY steps; /* Steps of the path. */
-  json_path_step_t*  last_step; /* Points to the last step. */
+  int last_step_idx;
 
   int mode_strict; /* TRUE if the path specified as 'strict' */
   enum json_path_step_types types_used; /* The '|' of all step's 'type'-s */

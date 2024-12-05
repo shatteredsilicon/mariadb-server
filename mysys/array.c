@@ -500,7 +500,7 @@ int mem_root_allocate_dynamic(MEM_ROOT *mem_root,
 }
 
 
-int mem_root_dynamic_array_set_val(MEM_ROOT_DYNAMIC_ARRAY *array,
+inline int mem_root_dynamic_array_set_val(MEM_ROOT_DYNAMIC_ARRAY *array,
                                    const void *element, size_t idx)
 {
   if (idx >= array->max_element)
@@ -509,13 +509,20 @@ int mem_root_dynamic_array_set_val(MEM_ROOT_DYNAMIC_ARRAY *array,
       return TRUE;
     array->elements++;
   }
+
+  /*
+     Ensure the array size has increased and the index is
+     now well within the array bounds.
+  */
+  DBUG_ASSERT(idx < array->max_element);
+
   memcpy(array->buffer+(idx * array->size_of_element), element,
          array->size_of_element);
 
   return FALSE;
 }
 
-void* mem_root_dynamic_array_get_val(MEM_ROOT_DYNAMIC_ARRAY *array, size_t idx)
+inline void* mem_root_dynamic_array_get_val(MEM_ROOT_DYNAMIC_ARRAY *array, size_t idx)
 {
   void* element_ptr;
 
@@ -524,12 +531,19 @@ void* mem_root_dynamic_array_get_val(MEM_ROOT_DYNAMIC_ARRAY *array, size_t idx)
     if (mem_root_allocate_dynamic(array->mem_root, array, idx))
       return 0;
   }
+
+  /*
+     Ensure the array size has increased and the index is
+     now well within the array bounds.
+  */
+  DBUG_ASSERT(idx < array->max_element);
+
   // Calculate the pointer to the desired element in the array
   element_ptr = array->buffer + (idx * array->size_of_element);
   return element_ptr;
 }
 
-void* mem_root_dynamic_array_increment(MEM_ROOT_DYNAMIC_ARRAY *array, uchar* ptr, size_t n)
+inline void* mem_root_dynamic_array_increment(MEM_ROOT_DYNAMIC_ARRAY *array, uchar* ptr, size_t n)
 {
   /* first get the current "index" (hence the -1) of the array. */
   size_t curr_idx= (ptr-array->buffer)/(array->size_of_element)-1;
@@ -544,4 +558,3 @@ void* mem_root_dynamic_array_increment(MEM_ROOT_DYNAMIC_ARRAY *array, uchar* ptr
   }
   return ptr;
 }
-
