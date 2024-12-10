@@ -248,7 +248,8 @@ public:
                     String *stmt_query, DDL_LOG_STATE *ddl_log_state);
   bool process_triggers(THD *thd, trg_event_type event,
                         trg_action_time_type time_type,
-                        bool old_row_is_record1);
+                        bool old_row_is_record1,
+                        bool *skip_row_indicator);
   void empty_lists();
   bool create_lists_needed_for_files(MEM_ROOT *root);
   bool save_trigger_file(THD *thd, const LEX_CSTRING *db, const LEX_CSTRING *table_name);
