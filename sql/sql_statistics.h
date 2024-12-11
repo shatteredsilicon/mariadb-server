@@ -150,6 +150,8 @@ double get_column_range_cardinality(Field *field,
                                     uint range_flag);
 bool is_stat_table(const Lex_ident_db &db, const Lex_ident_table &table);
 bool is_eits_usable(Field* field);
+uint get_offset_to_value(Field *field);
+uchar *get_buffer_end(uchar *to);
 
 class Histogram_builder;
 
@@ -183,7 +185,8 @@ public:
   virtual void init_for_collection(MEM_ROOT *mem_root, Histogram_type htype_arg,
                                    ulonglong size)=0;
   virtual Histogram_builder *create_builder(Field *col, uint col_len,
-                                            ha_rows rows)=0;
+                                            ha_rows rows,
+                                            bool is_variable_sized)=0;
 
   /*
     This function checks that histograms should be usable only when
@@ -315,7 +318,8 @@ public:
   void init_for_collection(MEM_ROOT *mem_root, Histogram_type htype_arg,
                            ulonglong size) override;
   Histogram_builder *create_builder(Field *col, uint col_len,
-                                    ha_rows rows) override;
+                                    ha_rows rows,
+                                    bool is_variable_sized) override;
 
   void set_value(uint i, double val)
   {
@@ -408,7 +412,7 @@ class Histogram_builder: public Sql_alloc
 {
 protected:
   Field *column;           /* table field for which the histogram is built */
-  uint col_length;         /* size of this field                           */
+  size_t col_length;         /* size of this field                           */
   ha_rows records;         /* number of records the histogram is built for */
 
   Histogram_builder(Field *col, uint col_len, ha_rows rows) :
