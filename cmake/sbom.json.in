@@ -19,7 +19,8 @@
           "@CPACK_PACKAGE_URL@"
         ]
       },
-      "purl": "pkg:github/@GITHUB_REPO_USER@/@GITHUB_REPO_NAME@@@GIT_REV_SHORT@"
+      "purl": "pkg:github/@GITHUB_REPO_USER@/@GITHUB_REPO_NAME@@@GIT_REV_SHORT@",
+      "cpe": "cpe:2.3:a:mariadb:mariadb:@CPACK_PACKAGE_VERSION@:*:*:*:*:*:*"
     },
     "authors": [
       {

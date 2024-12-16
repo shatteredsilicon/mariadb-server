@@ -34,6 +34,29 @@ MACRO(ADD_THIRD_PARTY_DEPENDENCY name url tag rev version description)
  LIST(APPEND ALL_THIRD_PARTY ${name})
 ENDMACRO()
 
+# Get CPE ID ( https://en.wikipedia.org/wiki/Common_Platform_Enumeration )
+# for given project name and version
+# Only "known" CPEs are handled here, e.g currently no CPE for rocksdb
+FUNCTION(SBOM_GET_CPE name version var)
+  SET(cpe_prefix_map
+    "zlib" "zlib:zlib"
+    "mariadb-connector-c" "mariadb:connector\\\\/c"
+    "wolfssl" "wolfssl:wolfssl"
+    "minizip" "zlib:zlib"
+    "pcre2" "pcre:pcre2"
+    "fmt" "fmt:fmt"
+  )
+  LIST(FIND cpe_prefix_map "${name}" i)
+  IF(i GREATER -1)
+    MATH(EXPR next_idx "${i}+1")
+    LIST(GET cpe_prefix_map ${next_idx} cpe_name_and_vendor)
+    STRING(REGEX REPLACE "[^0-9\\.]" "" cleaned_version "${version}")
+    SET(${var} "cpe:2.3:a:${cpe_name_and_vendor}:${cleaned_version}:*:*:*:*:*:*:*" PARENT_SCOPE)
+  ELSE()
+    SET(${var} "" PARENT_SCOPE)
+  ENDIF()
+ENDFUNCTION()
+
 # Add dependency on CMake ExternalProject.
 # Currently, only works for github hosted projects,
 # URL property of the external project needs to point to release source download
@@ -211,13 +234,17 @@ FUNCTION(GENERATE_SBOM)
       SET(purl "pkg:github/${repo_user_lower}/${repo_name_lower}@${revision}")
     ENDIF()
     SBOM_GET_SUPPLIER(${repo_name_lower} ${repo_user_lower} supplier)
+    SBOM_GET_CPE(${repo_name_lower} "${version}" cpe)
+    IF(cpe)
+      SET(cpe "\n      \"cpe\": \"${cpe}\",")
+    ENDIF()
     STRING(APPEND sbom_components "
     {
       \"bom-ref\": \"${bom_ref}\",
       \"type\": \"library\",
       \"name\": \"${repo_name}\",
       \"version\": \"${version}\",${desc_line}
-      \"purl\": \"${purl}\",
+      \"purl\": \"${purl}\",${cpe}
       \"supplier\": {
           \"name\": \"${supplier}\"
        }
