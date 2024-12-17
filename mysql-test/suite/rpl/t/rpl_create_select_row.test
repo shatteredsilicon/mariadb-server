@@ -21,10 +21,14 @@ connect (conn_err,localhost,root,,);
 call mtr.add_suppression("Multi-statement transaction required more than 'max_binlog_cache_size' bytes of storage");
 --error ER_TRANS_CACHE_FULL
 create table t engine=myisam select repeat ('a',4096*3) AS a;
+--disconnect conn_err
 
+connect (conn_err,localhost,root,,);
 --error ER_TRANS_CACHE_FULL
 create table t engine=innodb select repeat ('a',4096*3) AS a;
+--disconnect conn_err
 
+connect (conn_err,localhost,root,,);
 --error ER_DUP_ENTRY
 create table t (a int unique, b char) select 1 AS a, 'b' as b union select 1 as a, 'c' as b;
 --error ER_NO_SUCH_TABLE
