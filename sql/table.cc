@@ -9114,8 +9114,8 @@ void TABLE::prepare_triggers_for_insert_stmt_or_event()
 {
   if (triggers)
   {
-    if (triggers->has_triggers(TRG_EVENT_DELETE,
-                               TRG_ACTION_AFTER))
+    triggers->clear_extra_null_bitmap();
+    if (triggers->has_triggers(TRG_EVENT_DELETE, TRG_ACTION_AFTER))
     {
       /*
         The table has AFTER DELETE triggers that might access to
@@ -9124,8 +9124,7 @@ void TABLE::prepare_triggers_for_insert_stmt_or_event()
       */
       (void) file->extra(HA_EXTRA_DELETE_CANNOT_BATCH);
     }
-    if (triggers->has_triggers(TRG_EVENT_UPDATE,
-                               TRG_ACTION_AFTER))
+    if (triggers->has_triggers(TRG_EVENT_UPDATE, TRG_ACTION_AFTER))
     {
       /*
         The table has AFTER UPDATE triggers that might access to subject
@@ -9140,17 +9139,19 @@ void TABLE::prepare_triggers_for_insert_stmt_or_event()
 
 bool TABLE::prepare_triggers_for_delete_stmt_or_event()
 {
-  if (triggers &&
-      triggers->has_triggers(TRG_EVENT_DELETE,
-                             TRG_ACTION_AFTER))
+  if (triggers)
   {
-    /*
-      The table has AFTER DELETE triggers that might access to subject table
-      and therefore might need delete to be done immediately. So we turn-off
-      the batching.
-    */
-    (void) file->extra(HA_EXTRA_DELETE_CANNOT_BATCH);
-    return TRUE;
+    triggers->clear_extra_null_bitmap();
+    if (triggers->has_triggers(TRG_EVENT_DELETE, TRG_ACTION_AFTER))
+    {
+      /*
+        The table has AFTER DELETE triggers that might access to subject table
+        and therefore might need delete to be done immediately. So we turn-off
+        the batching.
+      */
+      (void) file->extra(HA_EXTRA_DELETE_CANNOT_BATCH);
+      return TRUE;
+    }
   }
   return FALSE;
 }
@@ -9158,17 +9159,19 @@ bool TABLE::prepare_triggers_for_delete_stmt_or_event()
 
 bool TABLE::prepare_triggers_for_update_stmt_or_event()
 {
-  if (triggers &&
-      triggers->has_triggers(TRG_EVENT_UPDATE,
-                             TRG_ACTION_AFTER))
+  if (triggers)
   {
-    /*
-      The table has AFTER UPDATE triggers that might access to subject
-      table and therefore might need update to be done immediately.
-      So we turn-off the batching.
-    */ 
-    (void) file->extra(HA_EXTRA_UPDATE_CANNOT_BATCH);
-    return TRUE;
+    triggers->clear_extra_null_bitmap();
+    if (triggers->has_triggers(TRG_EVENT_UPDATE, TRG_ACTION_AFTER))
+    {
+      /*
+        The table has AFTER UPDATE triggers that might access to subject
+        table and therefore might need update to be done immediately.
+        So we turn-off the batching.
+      */
+      (void) file->extra(HA_EXTRA_UPDATE_CANNOT_BATCH);
+      return TRUE;
+    }
   }
   return FALSE;
 }
