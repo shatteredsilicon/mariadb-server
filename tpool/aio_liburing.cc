@@ -139,6 +139,7 @@ public:
 private:
   static void thread_routine(aio_uring *aio)
   {
+    aio->m_pool->m_worker_init_callback();
     for (;;)
     {
       io_uring_cqe *cqe;
@@ -181,6 +182,7 @@ private:
       iocb->m_internal_task.m_group= iocb->m_group;
       aio->tpool_->submit_task(&iocb->m_internal_task);
     }
+    aio->m_pool->m_worker_destroy_callback();
   }
 
   io_uring uring_;
