@@ -3548,7 +3548,7 @@ Virtual_column_info::is_equivalent(THD *thd, TABLE_SHARE *share, TABLE_SHARE *vc
 {
   MEM_ROOT memroot;
   init_alloc_root(PSI_INSTRUMENT_ME, &memroot, ALLOC_ROOT_MIN_BLOCK_SIZE, 4096,
-                  MYF(MY_THREAD_SPECIFIC));
+                  MYF(0));
   SCOPE_VALUE(thd->mem_root, &memroot);
   SCOPE_VALUE(thd->free_list, (Item *) NULL);
   /* SCOPE_EXIT must go after SCOPE_VALUE as destructors are called in reverse order */
