@@ -3436,6 +3436,15 @@ longlong Item_field::val_int()
 }
 
 
+bool Item_field::val_bool()
+{
+  DBUG_ASSERT(fixed());
+  if ((null_value= field->is_null()))
+    return 0;
+  return field->val_bool();
+}
+
+
 my_decimal *Item_field::val_decimal(my_decimal *decimal_value)
 {
   if ((null_value= field->is_null()))
@@ -9783,6 +9792,12 @@ void Item_default_value::calculate()
   if (field->default_value)
     field->set_default();
   DEBUG_SYNC(field->table->in_use, "after_Item_default_value_calculate");
+}
+
+bool Item_default_value::val_bool()
+{
+  calculate();
+  return Item_field::val_bool();
 }
 
 bool Item_default_value::val_native(THD *thd, Native *to)

@@ -8002,6 +8002,12 @@ Item *Type_handler_interval_DDhhmmssff::
 }
 
 /***************************************************************************/
+Item_literal *Type_handler::create_boolean_false_item(THD *thd) const
+{
+  return new (thd->mem_root) Item_int(thd, 0);
+}
+
+/***************************************************************************/
 
 void Type_handler_string_result::Item_param_setup_conversion(THD *thd,
                                                              Item_param *param)
