@@ -212,4 +212,14 @@ c	vec_distance(d,vec_fromtext('[5,4,3,2,1]'))	vec_distance_cosine(d,vec_fromtext
 select e,vec_distance(f,vec_fromtext('[5,4,3,2,1]')) from t3;
 ERROR HY000: Cannot determine distance type for VEC_DISTANCE, index is not found
 drop table t1, t2, t3;
+#
+# MDEV-35724 VEC_DISTANCE does not work in HAVING clause
+#
+create table t (v vector(1) not null, vector(v));
+insert into t values (0x31313131),(0x32323232);
+select v from t having vec_distance(v,0x30303030) > 0;
+v
+1111
+2222
+drop table t;
 # End of 11.8 tests

@@ -61,9 +61,9 @@ bool Item_func_vec_distance::fix_length_and_dec(THD *thd)
   case COSINE:    calc_distance= calc_distance_cosine; break;
   case AUTO:
     for (uint fno=0; fno < 2; fno++)
-      if (args[fno]->type() == Item::FIELD_ITEM)
+      if (args[fno]->real_item()->type() == Item::FIELD_ITEM)
       {
-        Field *f= ((Item_field*)args[fno])->field;
+        Field *f= ((Item_field*)args[fno]->real_item())->field;
         KEY *kinfo= f->table->s->key_info;
         for (uint i= f->table->s->keys; i < f->table->s->total_keys; i++)
           if (kinfo[i].algorithm == HA_KEY_ALG_VECTOR && f->key_start.is_set(i))
