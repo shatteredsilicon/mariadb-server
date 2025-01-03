@@ -216,10 +216,21 @@ drop table t1, t2, t3;
 # MDEV-35724 VEC_DISTANCE does not work in HAVING clause
 #
 create table t (v vector(1) not null, vector(v));
-insert into t values (0x31313131),(0x32323232);
+insert t values (0x31313131),(0x32323232);
 select v from t having vec_distance(v,0x30303030) > 0;
 v
 1111
 2222
+drop table t;
+#
+# MDEV-35752 VEC_DISTANCE does not work in triggers
+#
+create table t (id int primary key default 1, v vector(1) not null default 0x30303030, vector(v), d float);
+create trigger tr before insert on t for each row set new.d = vec_distance(new.v,0x30303030);
+insert t (v) values (0x31313131);
+select vec_distance(default(v), 0x31313131) from t;
+vec_distance(default(v), 0x31313131)
+0.0000000019375161827791346
+insert t (v) values (0x32323232) on duplicate key update d=vec_distance(values(v), 0x31313131);
 drop table t;
 # End of 11.8 tests
