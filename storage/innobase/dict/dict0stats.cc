@@ -2928,7 +2928,7 @@ dict_stats_save(
 	    || strcmp(table_stats->name.m_name, TABLE_STATS_NAME)) {
 release_and_exit:
 		if (table_stats) {
-			dict_table_close(table_stats, false, thd, mdl_table);
+			dict_table_close(table_stats, thd, mdl_table);
 		}
 		return DB_STATS_DO_NOT_EXIST;
 	}
@@ -2945,7 +2945,7 @@ release_and_exit:
 		goto release_and_exit;
 	}
 	if (strcmp(index_stats->name.m_name, INDEX_STATS_NAME)) {
-		dict_table_close(index_stats, false, thd, mdl_index);
+		dict_table_close(index_stats, thd, mdl_index);
 		goto release_and_exit;
 	}
 
@@ -3014,8 +3014,8 @@ free_and_exit:
 		dict_sys.unlock();
 unlocked_free_and_exit:
 		trx->free();
-		dict_table_close(table_stats, false, thd, mdl_table);
-		dict_table_close(index_stats, false, thd, mdl_index);
+		dict_table_close(table_stats, thd, mdl_table);
+		dict_table_close(index_stats, thd, mdl_index);
 		return ret;
 	}
 
@@ -3499,7 +3499,7 @@ dict_stats_fetch_from_ps(
 	    || strcmp(table_stats->name.m_name, TABLE_STATS_NAME)) {
 release_and_exit:
 		if (table_stats) {
-			dict_table_close(table_stats, false, thd, mdl_table);
+			dict_table_close(table_stats, thd, mdl_table);
 		}
 		return DB_STATS_DO_NOT_EXIST;
 	}
@@ -3516,7 +3516,7 @@ release_and_exit:
 		goto release_and_exit;
 	}
 	if (strcmp(index_stats->name.m_name, INDEX_STATS_NAME)) {
-		dict_table_close(index_stats, false, thd, mdl_index);
+		dict_table_close(index_stats, thd, mdl_index);
 		goto release_and_exit;
 	}
 
@@ -3606,8 +3606,8 @@ release_and_exit:
 	/* pinfo is freed by que_eval_sql() */
 	dict_sys.unlock();
 
-	dict_table_close(table_stats, false, thd, mdl_table);
-	dict_table_close(index_stats, false, thd, mdl_index);
+	dict_table_close(table_stats, thd, mdl_table);
+	dict_table_close(index_stats, thd, mdl_index);
 
 	trx_commit_for_mysql(trx);
 

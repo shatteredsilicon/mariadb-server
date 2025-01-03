@@ -1491,9 +1491,9 @@ static void innodb_drop_database(handlerton*, char *path)
     trx->commit();
 
   if (table_stats)
-    dict_table_close(table_stats, true, thd, mdl_table);
+    dict_table_close(table_stats, thd, mdl_table);
   if (index_stats)
-    dict_table_close(index_stats, true, thd, mdl_index);
+    dict_table_close(index_stats, thd, mdl_index);
   row_mysql_unlock_data_dictionary(trx);
 
   trx->free();
@@ -2003,7 +2003,7 @@ static int innodb_check_version(handlerton *hton, const char *path,
   {
     const trx_id_t trx_id= table->def_trx_id;
     DBUG_ASSERT(trx_id <= create_id);
-    dict_table_close(table);
+    table->release();
     DBUG_PRINT("info", ("create_id: %llu  trx_id: %" PRIu64, create_id, trx_id));
     DBUG_RETURN(create_id != trx_id);
   }
@@ -3400,7 +3400,7 @@ static bool innobase_query_caching_table_check(
 
 	bool allow = innobase_query_caching_table_check_low(table, trx);
 
-	dict_table_close(table);
+	table->release();
 
 	if (allow) {
 		/* If the isolation level is high, assign a read view for the
@@ -13741,8 +13741,8 @@ int ha_innobase::delete_table(const char *name)
       ut_ad(err == DB_LOCK_WAIT);
       ut_ad(trx->error_state == DB_SUCCESS);
       err= DB_SUCCESS;
-      dict_table_close(table_stats, false, thd, mdl_table);
-      dict_table_close(index_stats, false, thd, mdl_index);
+      dict_table_close(table_stats, thd, mdl_table);
+      dict_table_close(index_stats, thd, mdl_index);
       table_stats= nullptr;
       index_stats= nullptr;
     }
@@ -13817,9 +13817,9 @@ err_exit:
       purge_sys.resume_FTS();
 #endif
     if (table_stats)
-      dict_table_close(table_stats, true, thd, mdl_table);
+      dict_table_close(table_stats, thd, mdl_table);
     if (index_stats)
-      dict_table_close(index_stats, true, thd, mdl_index);
+      dict_table_close(index_stats, thd, mdl_index);
     dict_sys.unlock();
     if (trx != parent_trx)
       trx->free();
@@ -13849,9 +13849,9 @@ err_exit:
   std::vector<pfs_os_file_t> deleted;
   trx->commit(deleted);
   if (table_stats)
-    dict_table_close(table_stats, true, thd, mdl_table);
+    dict_table_close(table_stats, thd, mdl_table);
   if (index_stats)
-    dict_table_close(index_stats, true, thd, mdl_index);
+    dict_table_close(index_stats, thd, mdl_index);
   row_mysql_unlock_data_dictionary(trx);
   for (pfs_os_file_t d : deleted)
     os_file_close(d);
@@ -14196,9 +14196,9 @@ int ha_innobase::truncate()
   mem_heap_free(heap);
 
   if (table_stats)
-    dict_table_close(table_stats, false, m_user_thd, mdl_table);
+    dict_table_close(table_stats, m_user_thd, mdl_table);
   if (index_stats)
-    dict_table_close(index_stats, false, m_user_thd, mdl_index);
+    dict_table_close(index_stats, m_user_thd, mdl_index);
 
   DBUG_RETURN(err);
 }
@@ -14285,10 +14285,8 @@ ha_innobase::rename_table(
 				we cannot lock the tables, when the
 				table is being renamed from from a
 				temporary name. */
-				dict_table_close(table_stats, false, thd,
-						 mdl_table);
-				dict_table_close(index_stats, false, thd,
-						 mdl_index);
+				dict_table_close(table_stats, thd, mdl_table);
+				dict_table_close(index_stats, thd, mdl_index);
 				table_stats = nullptr;
 				index_stats = nullptr;
 			}
@@ -14335,10 +14333,10 @@ ha_innobase::rename_table(
 	}
 
 	if (table_stats) {
-		dict_table_close(table_stats, true, thd, mdl_table);
+		dict_table_close(table_stats, thd, mdl_table);
 	}
 	if (index_stats) {
-		dict_table_close(index_stats, true, thd, mdl_index);
+		dict_table_close(index_stats, thd, mdl_index);
 	}
 	row_mysql_unlock_data_dictionary(trx);
 	if (error == DB_SUCCESS) {
@@ -15723,7 +15721,7 @@ get_foreign_key_info(
 					<< foreign->foreign_table_name;
  			}
 		} else {
-			dict_table_close(ref_table, true);
+			ref_table->release();
 		}
 	}
 
@@ -17582,7 +17580,7 @@ static int innodb_ft_aux_table_validate(THD *thd, st_mysql_sys_var*,
 			    table_name, false, DICT_ERR_IGNORE_NONE)) {
 			const table_id_t id = dict_table_has_fts_index(table)
 				? table->id : 0;
-			dict_table_close(table);
+			table->release();
 			if (id) {
 				innodb_ft_aux_table_id = id;
 				if (table_name == buf) {

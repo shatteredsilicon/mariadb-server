@@ -329,7 +329,7 @@ invalid_table_id:
 
   if (!mdl || !table->is_accessible())
   {
-    dict_table_close(table, false, thd, mdl);
+    dict_table_close(table, thd, mdl);
     goto invalid_table_id;
   }
 
@@ -346,7 +346,7 @@ invalid_table_id:
     ? dict_stats_update(table, DICT_STATS_RECALC_PERSISTENT)
     : DB_SUCCESS_LOCKED_REC;
 
-  dict_table_close(table, false, thd, mdl);
+  dict_table_close(table, thd, mdl);
 
   mysql_mutex_lock(&recalc_pool_mutex);
   auto i= std::find_if(recalc_pool.begin(), recalc_pool.end(),
