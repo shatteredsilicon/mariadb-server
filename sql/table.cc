@@ -1852,6 +1852,7 @@ int TABLE_SHARE::init_from_binary_frm_image(THD *thd, bool write,
   extra2_fields extra2;
   bool extra_index_flags_present= FALSE;
   key_map sort_keys_in_use(0);
+  const bool inc_feature= (share->tmp_table != INTERNAL_TMP_TABLE || write);
   DBUG_ENTER("TABLE_SHARE::init_from_binary_frm_image");
 
   keyinfo= &first_keyinfo;
@@ -2425,7 +2426,8 @@ int TABLE_SHARE::init_from_binary_frm_image(THD *thd, bool write,
                         vers.start_fieldno, vers.end_fieldno));
     versioned= VERS_TIMESTAMP;
     vers_can_native= handler_file->vers_can_native(thd);
-    status_var_increment(thd->status_var.feature_system_versioning);
+    if (inc_feature)
+      status_var_increment(thd->status_var.feature_system_versioning);
   } // if (system_period == NULL)
 
   if (extra2.application_period.str)
@@ -2448,7 +2450,8 @@ int TABLE_SHARE::init_from_binary_frm_image(THD *thd, bool write,
          + 2 * frm_fieldno_size
         != extra2.application_period.length)
       goto err;
-    status_var_increment(thd->status_var.feature_application_time_periods);
+    if (inc_feature)
+      status_var_increment(thd->status_var.feature_application_time_periods);
   }
 
   if (extra2.without_overlaps.str)
@@ -2791,7 +2794,7 @@ int TABLE_SHARE::init_from_binary_frm_image(THD *thd, bool write,
 
       reg_field->invisible= f_visibility(flags);
     }
-    if (reg_field->invisible == INVISIBLE_USER)
+    if (reg_field->invisible == INVISIBLE_USER && inc_feature)
       status_var_increment(thd->status_var.feature_invisible_columns);
     if (!reg_field->invisible)
       share->visible_fields++;
