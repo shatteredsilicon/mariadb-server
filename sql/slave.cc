@@ -2609,10 +2609,6 @@ err:
   DBUG_RETURN(0);
 
 network_err:
-  if (master_res)
-    mysql_free_result(master_res);
-  DBUG_RETURN(2);
-
 slave_killed_err:
   if (master_res)
     mysql_free_result(master_res);
@@ -4383,13 +4379,10 @@ on this slave.\
 
 static bool check_io_slave_killed(Master_info *mi, const char *info)
 {
-  if (io_slave_killed(mi))
-  {
-    if (info && global_system_variables.log_warnings)
-      sql_print_information("%s", info);
-    return TRUE;
-  }
-  return FALSE;
+  bool is_io_slave_killed= io_slave_killed(mi);
+  if (is_io_slave_killed && info && global_system_variables.log_warnings)
+    sql_print_information("%s", info);
+  return is_io_slave_killed;
 }
 
 /**
@@ -4445,11 +4438,10 @@ static int try_to_reconnect(THD *thd, MYSQL *mysql, Master_info *mi,
     {
       tmp.append(STRING_WITH_LEN("; GTID position '"));
       mi->gtid_current_pos.append_to_string(&tmp);
-      if (mi->events_queued_since_last_gtid == 0)
-        tmp.append(STRING_WITH_LEN("'"));
-      else
+      tmp.append('\'');
+      if (mi->events_queued_since_last_gtid)
       {
-        tmp.append(STRING_WITH_LEN("', GTID event skip "));
+        tmp.append(STRING_WITH_LEN(", GTID event skip "));
         tmp.append_ulonglong((ulonglong)mi->events_queued_since_last_gtid);
       }
     }
@@ -4695,7 +4687,7 @@ connected:
 
   DBUG_PRINT("info",("Starting reading binary log from master"));
   thd->set_command(COM_SLAVE_IO);
-  while (!io_slave_killed(mi))
+  if (!io_slave_killed(mi))
   {
     const uchar *event_buf;
 
@@ -6962,7 +6954,7 @@ static int connect_to_master(THD* thd, MYSQL* mysql, Master_info* mi,
                              bool reconnect, bool suppress_warnings)
 {
   int slave_was_killed;
-  int last_errno= -2;                           // impossible error
+  unsigned int last_errno= 0; // initialize with not-error
   ulong err_count=0;
   my_bool my_true= 1;
   DBUG_ENTER("connect_to_master");
@@ -7023,13 +7015,13 @@ static int connect_to_master(THD* thd, MYSQL* mysql, Master_info* mi,
                "terminated.");
     DBUG_RETURN(1);
   }
-  while (!(slave_was_killed = io_slave_killed(mi)) &&
-         (reconnect ? mysql_reconnect(mysql) != 0 :
-          mysql_real_connect(mysql, mi->host, mi->user, mi->password, 0,
-                             mi->port, 0, client_flag) == 0))
+  while (!(slave_was_killed= io_slave_killed(mi)) &&
+         (reconnect ? mysql_reconnect(mysql) :
+          !mysql_real_connect(mysql, mi->host, mi->user, mi->password, 0,
+                              mi->port, 0, client_flag)))
   {
     /* Don't repeat last error */
-    if ((int)mysql_errno(mysql) != last_errno && !io_slave_killed(mi))
+    if (mysql_errno(mysql) != last_errno)
     {
       last_errno=mysql_errno(mysql);
       suppress_warnings= 0;
