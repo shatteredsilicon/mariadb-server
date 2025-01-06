@@ -63,7 +63,7 @@ bool Item_func_vec_distance::fix_length_and_dec(THD *thd)
     for (uint i=0; i < 2; i++)
       if (auto *item= dynamic_cast<Item_field*>(args[i]->real_item()))
       {
-        TABLE_SHARE *share= item->field->table->s;
+        TABLE_SHARE *share= item->field->orig_table->s;
         Field *f= share->field[item->field->field_index];
         KEY *kinfo= share->key_info;
         for (uint j= share->keys; j < share->total_keys; j++)
