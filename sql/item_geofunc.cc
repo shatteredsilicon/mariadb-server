@@ -1459,6 +1459,16 @@ bool Item_func_spatial_precise_rel::val_bool()
       null_value= g1.store_shapes(&trn) || g2.store_shapes(&trn);
       break;
     case SP_OVERLAPS_FUNC:
+    {
+      // Both geometries must have the same number of dimensions.
+      uint32 g1_dim, g2_dim;
+      const char *dummy;
+      g1.geom->dimension(&g1_dim, &dummy);
+      g2.geom->dimension(&g2_dim, &dummy);
+      if (g1_dim != g2_dim)
+        DBUG_RETURN(0);
+      // Intentionally fall-through to SP_CROSSES_FUNC case.
+    }
     case SP_CROSSES_FUNC:
       func.add_operation(Gcalc_function::op_intersection, 2);
       if (func.reserve_op_buffer(3))
