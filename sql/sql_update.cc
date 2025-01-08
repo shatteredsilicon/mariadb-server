@@ -2300,6 +2300,12 @@ int multi_update::prepare2(JOIN *join)
 
 multi_update::~multi_update()
 {
+  cleanup();
+}
+
+
+void multi_update::cleanup()
+{
   TABLE_LIST *table;
   for (table= update_tables ; table; table= table->next_local)
   {
@@ -2319,10 +2325,12 @@ multi_update::~multi_update()
       }
     }
   }
-  if (copy_field)
-    delete [] copy_field;
+  if (copy_field) {
+    delete[] copy_field;
+    copy_field= nullptr;
+  }
   thd->count_cuted_fields= CHECK_FIELD_IGNORE;		// Restore this setting
-  DBUG_ASSERT(trans_safe || !updated || 
+  DBUG_ASSERT(trans_safe || !updated ||
               thd->transaction->all.modified_non_trans_table);
 }
 
@@ -3176,7 +3184,7 @@ bool Sql_cmd_update::execute_inner(THD *thd)
   if (result)
   {
     res= false;
-    delete result;
+    result->cleanup();
   }
 
   status_var_add(thd->status_var.rows_sent, thd->get_sent_row_count());
