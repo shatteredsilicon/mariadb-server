@@ -12077,8 +12077,8 @@ static int online_alter_read_from_binlog(THD *thd, rpl_group_info *rgi,
   do
   {
     const auto *descr_event= rgi->rli->relay_log.description_event_for_exec;
-    auto *ev= Log_event::read_log_event(log_file, descr_event, 0, 1, ~0UL);
-    error= log_file->error;
+    auto *ev= Log_event::read_log_event(log_file, &error, descr_event,
+                                        0, 1, ~0UL);
     if (unlikely(!ev))
     {
       if (error)
