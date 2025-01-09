@@ -5053,8 +5053,9 @@ dberr_t row_merge_bulk_t::alloc_block()
   return DB_SUCCESS;
 }
 
-row_merge_bulk_t::row_merge_bulk_t(dict_table_t *table)
+row_merge_bulk_t::row_merge_bulk_t(dict_table_t *table, bool load_sql)
 {
+  m_load= load_sql;
   ulint n_index= 0;
   for (dict_index_t *index= UT_LIST_GET_FIRST(table->indexes);
        index; index= UT_LIST_GET_NEXT(indexes, index))
@@ -5254,6 +5255,30 @@ add_to_buf:
   }
 
 func_exit:
+  if (m_load && ind.is_clust())
+  {
+    /* During load operation, bulk insert operation for the
+    first insert statement itself. Consecutive insert operation
+    does follow normal insert codepath and avoids writing
+    undo log operation */
+    dict_index_t *index= const_cast<dict_index_t*>(&ind);
+    BtrBulk btr_bulk(index, trx);
+    err= row_merge_insert_index_tuples(index, index->table,
+                                       OS_FILE_CLOSED, nullptr,
+				       &m_merge_buf[0], &btr_bulk,
+				       0, 0, 0, nullptr,
+				       index->table->space_id,
+				       nullptr,
+				       m_blob_file.fd == OS_FILE_CLOSED
+				       ? nullptr : &m_blob_file);
+    if (err != DB_SUCCESS)
+      trx->error_info= index;
+    else if (ind.is_primary() && index->table->persistent_autoinc)
+      btr_write_autoinc(index, 1);
+    err= btr_bulk.finish(err);
+    if (err == DB_SUCCESS && index->is_clust())
+      index->table->stat_n_rows= 1;
+  }
   if (large_tuple_heap)
     mem_heap_free(large_tuple_heap);
   return err;
@@ -5332,6 +5357,11 @@ dberr_t row_merge_bulk_t::write_to_table(dict_table_t *table, trx_t *trx)
     if (!index->is_btree())
       continue;
 
+    if (index->is_clust() && m_load)
+    {
+      i++;
+      continue;
+    }
     dberr_t err= write_to_index(i, trx);
     switch (err) {
     default:
@@ -5347,6 +5377,7 @@ dberr_t row_merge_bulk_t::write_to_table(dict_table_t *table, trx_t *trx)
     i++;
   }
 
+  m_load= false;
   return DB_SUCCESS;
 }
 

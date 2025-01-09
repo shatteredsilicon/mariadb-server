@@ -446,13 +446,16 @@ class row_merge_bulk_t
   ut_new_pfx_t m_crypt_pfx;
   /** Block for encryption */
   row_merge_block_t *m_crypt_block= nullptr;
+  /** load statement */
+  bool m_load= false;
 public:
   /** Constructor.
   Create all merge files, merge buffer for all the table indexes
   expect fts indexes.
   Create a merge block which is used to write IO operation
-  @param table  table which undergoes bulk insert operation */
-  row_merge_bulk_t(dict_table_t *table);
+  @param table  table which undergoes bulk insert operation
+  @param load_sql load statement */
+  row_merge_bulk_t(dict_table_t *table, bool load_sql);
 
   /** Destructor.
   Remove all merge files, merge buffer for all table indexes. */
@@ -498,4 +501,7 @@ public:
 
   /** Init temporary files for each index */
   void init_tmp_file();
+
+  /** @return whether load statement has been executed */
+  bool load_stmt() { return m_load; }
 };

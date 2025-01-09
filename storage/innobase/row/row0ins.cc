@@ -2811,7 +2811,7 @@ avoid_bulk:
 			trx_start_if_not_started(trx, true);
 			trx->bulk_insert = true;
 			auto m = trx->mod_tables.emplace(index->table, 0);
-			m.first->second.start_bulk_insert(index->table);
+			m.first->second.start_bulk_insert(index->table, false);
 			err = m.first->second.bulk_insert_buffered(
 					*entry, *index, trx);
 			goto err_exit;
@@ -3430,7 +3430,7 @@ row_ins_index_entry(
 			return(DB_LOCK_WAIT);});
 
 	if (index->is_btree()) {
-		if (auto t= trx->check_bulk_buffer(index->table)) {
+		if (auto t= trx->use_bulk_buffer(index, index->table)) {
 			/* MDEV-25036 FIXME:
 			row_ins_check_foreign_constraint() check
 			should be done before buffering the insert

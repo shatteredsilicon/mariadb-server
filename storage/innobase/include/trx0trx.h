@@ -458,12 +458,13 @@ public:
   }
 
   /** Notify the start of a bulk insert operation
-  @param table table to do bulk operation */
-  void start_bulk_insert(dict_table_t *table)
+  @param table table to do bulk operation
+  @param sql_load load data statement */
+  void start_bulk_insert(dict_table_t *table, bool sql_load)
   {
     first|= BULK;
     if (!table->is_temporary())
-      bulk_store= new row_merge_bulk_t(table);
+      bulk_store= new row_merge_bulk_t(table, sql_load);
   }
 
   /** Notify the end of a bulk insert operation */
@@ -516,6 +517,12 @@ public:
   bool bulk_buffer_exist() const
   {
     return bulk_store && is_bulk_insert();
+  }
+
+  /** @return whether load statement is being executed */
+  bool load_stmt() const
+  {
+    return bulk_store && bulk_store->load_stmt();
   }
 
   /** Free bulk insert operation */
@@ -1161,7 +1168,7 @@ public:
 
   /** @return logical modification time of a table only
   if the table has bulk buffer exist in the transaction */
-  trx_mod_table_time_t *check_bulk_buffer(dict_table_t *table)
+  trx_mod_table_time_t *use_bulk_buffer(dict_index_t *index, dict_table_t *table)
   {
     if (UNIV_LIKELY(!bulk_insert))
       return nullptr;
@@ -1169,6 +1176,9 @@ public:
     ut_ad(table->skip_alter_undo || !check_foreigns);
     auto it= mod_tables.find(table);
     if (it == mod_tables.end() || !it->second.bulk_buffer_exist())
+      return nullptr;
+    /* Avoid using bulk buffer for load statement */
+    if (index->is_clust() && it->second.load_stmt())
       return nullptr;
     return &it->second;
   }
