@@ -3637,6 +3637,8 @@ int spider_check_trx_and_get_conn(
           }
         }
         conn->error_mode &= spider->error_mode;
+        if (conn->queued_connect)
+          conn->queued_connect_share= share;
       }
       if (!search_link_idx_is_checked)
       {
