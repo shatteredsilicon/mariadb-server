@@ -254,6 +254,10 @@ class Master_info : public Slave_reporting_capability
   */
   enum_binlog_checksum_alg checksum_alg_before_fd;
   uint connect_retry;
+  /** replica-specific @ref master_retry_count */
+  ulong retry_count;
+  /** count of connects the most-recent (or the current) connection has tried */
+  ulong connects_tried;
 #ifndef DBUG_OFF
   int events_till_disconnect;
 
