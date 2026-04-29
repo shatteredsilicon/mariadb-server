@@ -1545,13 +1545,15 @@ static int mysql_test_select(Prepared_statement *stmt,
 
   lex->first_select_lex()->context.resolve_in_select_list= TRUE;
 
-  ulong privilege= lex->exchange ? SELECT_ACL | FILE_ACL : SELECT_ACL;
+  if (lex->exchange && check_global_access(thd, FILE_ACL, false))
+    goto error;
+
   if (tables)
   {
-    if (check_table_access(thd, privilege, tables, FALSE, UINT_MAX, FALSE))
+    if (check_table_access(thd, SELECT_ACL, tables, FALSE, UINT_MAX, FALSE))
       goto error;
   }
-  else if (check_access(thd, privilege, any_db, NULL, NULL, 0, 0))
+  else if (check_access(thd, SELECT_ACL, any_db, NULL, NULL, 0, 0))
     goto error;
 
   if (!lex->result && !(lex->result= new (stmt->mem_root) select_send(thd)))
