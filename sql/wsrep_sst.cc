@@ -362,15 +362,14 @@ void wsrep_sst_auth_init ()
 
 bool  wsrep_sst_donor_check (sys_var *self, THD* thd, set_var* var)
 {
-  /* Allow empty value */
-  if (!var->save_result.string_value.str || var->save_result.string_value.length == 0)
-    return 0;
-
   /* Check length */
-  if ((var->save_result.string_value.length > (FN_REFLEN -1))) // safety
-  {
+  if (!var->save_result.string_value.str ||
+      var->save_result.string_value.length > FN_REFLEN-1) // safety
     goto err;
-  }
+
+  /* Allow empty value */
+  if (var->save_result.string_value.length == 0)
+    return 0;
 
   /* check also that donor string contains only accepted characters  */
   if (check_request_str(var->save_result.string_value.str,
