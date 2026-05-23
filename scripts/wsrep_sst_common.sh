@@ -25,7 +25,7 @@ export PATH="$PATH:/usr/sbin:/usr/bin:/sbin:/bin"
 
 safe()
 {
-  if [[ "${!1}" = *[\ \'\`]* ]]; then
+  if [[ "${!1}" = *[\ \'\`\$]* ]]; then
     wsrep_log_error "Invalid value for $1: ${!1}"
     exit 21
   fi
