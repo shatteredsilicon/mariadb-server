@@ -4499,7 +4499,7 @@ static uint find_field(Field **fields, uchar *record, uint start, uint length)
     May fail with some multibyte charsets though.
 */
 
-void append_unescaped(String *res, const char *pos, size_t length)
+void append_unescaped(String *res, const char *pos, size_t length, bool in_comment)
 {
   const char *end= pos+length;
   res->append('\'');
@@ -4527,6 +4527,14 @@ void append_unescaped(String *res, const char *pos, size_t length)
       res->append('\'');		/* Because of the sql syntax */
       res->append('\'');
       break;
+    case '*':
+      if (in_comment && pos + 1 < end && pos[1] == '/')
+      {
+        res->append('*');
+        res->append('\\');
+        break;
+      }
+      /* fallthrough */
     default:
       res->append(*pos);
       break;
