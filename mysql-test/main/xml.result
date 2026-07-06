@@ -1309,3 +1309,12 @@ DROP TABLE t1;
 #
 # End of 10.2 tests
 #
+
+#
+# MDEV-39750 ExtractValue does not control recursion depth.
+#
+SELECT ExtractValue('<a/>', REPEAT('(', 100000));
+ERROR HY000: Thread stack overrun:  'used bytes' used of a 'available' byte stack, and 'X' bytes needed. Consider increasing the thread_stack system variable.
+SELECT ExtractValue('<a/>', REPEAT('/n', 100000));
+ERROR HY000: Thread stack overrun:  'used bytes' used of a 'available' byte stack, and 'X' bytes needed. Consider increasing the thread_stack system variable.
+# End of 10.6 tests
