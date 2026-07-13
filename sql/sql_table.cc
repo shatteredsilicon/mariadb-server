@@ -448,6 +448,15 @@ bool check_mysql50_prefix(const char *name)
 }
 
 
+bool error_if_mysql50_prefix(const char *name, uint error)
+{
+  if (!check_mysql50_prefix(name))
+    return 0;
+  my_error(error, MYF(0), name);
+  return 1;
+}
+
+
 /**
   Check if given string begins with "#mysql50#" prefix, cut it if so.
   
@@ -566,8 +575,10 @@ uint build_table_filename(char *buff, size_t bufflen, const char *db,
   DBUG_ENTER("build_table_filename");
   DBUG_PRINT("enter", ("db: '%s'  table_name: '%s'  ext: '%s'  flags: %x",
                        db, table_name, ext, flags));
+  DBUG_ASSERT(*db);
 
-  (void) tablename_to_filename(db, dbbuff, sizeof(dbbuff));
+  if (!tablename_to_filename(db, dbbuff, sizeof(dbbuff)))
+    DBUG_RETURN(*buff= 0);
 
   /* Check if this is a temporary table name. Allow it if a corresponding .frm file exists */
   if (is_prefix(table_name, tmp_file_prefix) && strlen(table_name) < NAME_CHAR_LEN &&
@@ -576,8 +587,10 @@ uint build_table_filename(char *buff, size_t bufflen, const char *db,
 
   if (flags & FN_IS_TMP) // FN_FROM_IS_TMP | FN_TO_IS_TMP
     strmake(tbbuff, table_name, sizeof(tbbuff)-1);
-  else
-    (void) tablename_to_filename(table_name, tbbuff, sizeof(tbbuff));
+  else if (!*table_name)
+    *tbbuff= 0; // table_name="" hack is used very often
+  else if (!tablename_to_filename(table_name, tbbuff, sizeof(tbbuff)))
+    DBUG_RETURN(*buff= 0);
 
   char *end = buff + bufflen;
   /* Don't add FN_ROOTDIR if mysql_data_home already includes it */
@@ -3484,6 +3497,10 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
              connect_string->str, "CONNECTION", CONNECT_STRING_MAXLEN);
     DBUG_RETURN(TRUE);
   }
+
+  if (table_name.length &&
+      error_if_mysql50_prefix(table_name.str, ER_WRONG_TABLE_NAME))
+    DBUG_RETURN(TRUE);
 
   select_field_pos= alter_info->create_list.elements - select_field_count;
   null_fields= 0;
@@ -9848,6 +9865,10 @@ bool mysql_alter_table(THD *thd, const LEX_CSTRING *new_db,
     }
 #endif
   }
+
+  if (new_name->str &&
+      error_if_mysql50_prefix(new_name->str, ER_WRONG_TABLE_NAME))
+    DBUG_RETURN(true);
 
   THD_STAGE_INFO(thd, stage_init_update);
 
