@@ -990,3 +990,7 @@ foo\"bar
 foo\"bar
 set sql_mode=default;
 End of tests
+#
+# \0 in a query
+#
+select hex("1
