@@ -6928,7 +6928,7 @@ update_ref_and_keys(THD *thd, DYNAMIC_ARRAY *keyuse,JOIN_TAB *join_tab,
 {
   uint	and_level,i;
   KEY_FIELD *key_fields, *end, *field;
-  uint sz;
+  size_t sz;
   uint m= MY_MAX(select_lex->max_equal_elems,1);
   DBUG_ENTER("update_ref_and_keys");
   DBUG_PRINT("enter", ("normal_tables: %llx", normal_tables));

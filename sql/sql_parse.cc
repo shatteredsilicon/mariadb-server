@@ -3982,15 +3982,15 @@ mysql_execute_command(THD *thd)
       lex->exchange != NULL implies SELECT .. INTO OUTFILE and this
       requires FILE_ACL access.
     */
-    ulong privileges_requested= lex->exchange ? SELECT_ACL | FILE_ACL :
-      SELECT_ACL;
+    if (lex->exchange && (res= check_global_access(thd, FILE_ACL, false)))
+      break;
 
     if (all_tables)
       res= check_table_access(thd,
-                              privileges_requested,
+                              SELECT_ACL,
                               all_tables, FALSE, UINT_MAX, FALSE);
     else
-      res= check_access(thd, privileges_requested, any_db, NULL, NULL, 0, 0);
+      res= check_access(thd, SELECT_ACL, any_db, NULL, NULL, 0, 0);
 
     if (!res)
       res= execute_sqlcom_select(thd, all_tables);
