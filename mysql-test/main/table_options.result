@@ -200,7 +200,7 @@ show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `a` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci /* `opt`='two words' `opt1`='*\\/ oops1 ' */
+) ENGINE=MyISAM DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci /* `opt`='two words' `opt1`='*\/ oops1 ' */
 show table status like 't1';
 Name	Engine	Version	Row_format	Rows	Avg_row_length	Data_length	Max_data_length	Index_length	Data_free	Auto_increment	Create_time	Update_time	Check_time	Collation	Checksum	Create_options	Comment	Max_index_length	Temporary
 t1	MyISAM	10	.	0	0	0	.	1024	0	NULL	.	.	NULL	latin1_swedish_ci	NULL	`opt`='two words' `opt1`='*/ oops1 '		.	N
