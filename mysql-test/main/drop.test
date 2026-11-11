@@ -1,4 +1,5 @@
 call mtr.add_suppression("table or database name 'abc`def'");
+call mtr.add_suppression("Invalid .old.. table or database name 'a-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1234'");
 
 # Initialise
 --disable_warnings
