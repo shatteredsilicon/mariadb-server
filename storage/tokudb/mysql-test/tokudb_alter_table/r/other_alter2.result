@@ -60,7 +60,7 @@ foo	CREATE TABLE `foo` (
   PRIMARY KEY (`a`),
   UNIQUE KEY `c` (`c`),
   KEY `d` (`d`),
-  KEY `b` (`b`) `clustering`=yes
+  KEY `b` (`b`) `clustering`='yes'
 ) ENGINE=TokuDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci
 show create table foo_isam;
 Table	Create Table

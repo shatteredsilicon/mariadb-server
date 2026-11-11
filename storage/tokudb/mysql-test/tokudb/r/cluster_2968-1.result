@@ -1056,7 +1056,7 @@ s	CREATE TABLE `s` (
   `b` int(11) DEFAULT NULL,
   `c` int(11) DEFAULT NULL,
   KEY `b` (`b`),
-  KEY `b_2` (`b`) `clustering`=yes
+  KEY `b_2` (`b`) `clustering`='yes'
 ) ENGINE=TokuDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci
 show create table t;
 Table	Create Table
@@ -1065,7 +1065,7 @@ t	CREATE TABLE `t` (
   `b` int(11) DEFAULT NULL,
   `c` int(11) DEFAULT NULL,
   KEY `b` (`b`),
-  KEY `b_2` (`b`) `clustering`=yes
+  KEY `b_2` (`b`) `clustering`='yes'
 ) ENGINE=TokuDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci
 explain select straight_join * from s,t where s.b = t.b;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
@@ -1079,7 +1079,7 @@ s	CREATE TABLE `s` (
   `a` int(11) DEFAULT NULL,
   `b` int(11) DEFAULT NULL,
   `c` int(11) DEFAULT NULL,
-  KEY `b_2` (`b`) `clustering`=yes
+  KEY `b_2` (`b`) `clustering`='yes'
 ) ENGINE=TokuDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci
 show create table t;
 Table	Create Table
@@ -1087,7 +1087,7 @@ t	CREATE TABLE `t` (
   `a` int(11) DEFAULT NULL,
   `b` int(11) DEFAULT NULL,
   `c` int(11) DEFAULT NULL,
-  KEY `b_2` (`b`) `clustering`=yes
+  KEY `b_2` (`b`) `clustering`='yes'
 ) ENGINE=TokuDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci
 explain select straight_join * from s,t where s.b = t.b;
 id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
@@ -1105,7 +1105,7 @@ s	CREATE TABLE `s` (
   `a` int(11) DEFAULT NULL,
   `b` int(11) DEFAULT NULL,
   `c` int(11) DEFAULT NULL,
-  KEY `b_2` (`b`) `clustering`=yes,
+  KEY `b_2` (`b`) `clustering`='yes',
   KEY `b` (`b`)
 ) ENGINE=TokuDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci
 show create table t;
@@ -1114,7 +1114,7 @@ t	CREATE TABLE `t` (
   `a` int(11) DEFAULT NULL,
   `b` int(11) DEFAULT NULL,
   `c` int(11) DEFAULT NULL,
-  KEY `b_2` (`b`) `clustering`=yes,
+  KEY `b_2` (`b`) `clustering`='yes',
   KEY `b` (`b`)
 ) ENGINE=TokuDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci
 explain select straight_join * from s,t where s.b = t.b;

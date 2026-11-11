@@ -5,7 +5,7 @@ t1	CREATE TABLE `t1` (
   `a` int(11) DEFAULT NULL,
   `b` int(11) DEFAULT NULL,
   `c` text DEFAULT NULL,
-  KEY `a` (`a`) `clustering`=yes,
+  KEY `a` (`a`) `clustering`='yes',
   KEY `b` (`b`)
 ) ENGINE=TokuDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci
 insert t1 values (1, 1, 1);
