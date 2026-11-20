@@ -1095,7 +1095,8 @@ if [ "$WSREP_SST_OPT_ROLE" = 'donor' ]; then
 
         usrst=0
         if [ -n "$WSREP_SST_OPT_USER" ]; then
-           INNOEXTRA="$INNOEXTRA --user='$WSREP_SST_OPT_USER'"
+           WSREP_SST_OPT_USER_SAFE="$(safe WSREP_SST_OPT_USER)"
+           INNOEXTRA="$INNOEXTRA --user='$WSREP_SST_OPT_USER_SAFE'"
            usrst=1
         fi
 

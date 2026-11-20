@@ -2,6 +2,17 @@
 # with support for SSL.
 
 -- source include/have_ssl_communication.inc
+
+# Server is restricted to TLSv1.0 by this test's .opt; OpenSSL 3.x-era distro
+# builds (EL9/EL10, Debian/Ubuntu default policies) removed pre-TLS1.2 support,
+# so no connection can be established at all. Coverage retained on OpenSSL 1.x.
+let $ssl_lib= `SELECT @@version_ssl_library`;
+let $no_legacy_tls= `SELECT '$ssl_lib' LIKE 'OpenSSL%' AND LEFT(SUBSTRING_INDEX(SUBSTRING_INDEX('$ssl_lib',' ',2),' ',-1),1) + 0 >= 3`;
+if ($no_legacy_tls)
+{
+  skip Needs TLSv1.0 support; disabled by the SSL library;
+}
+
 --exec $MYSQL --host=localhost --ssl -e "show status like 'ssl_version';"
 --error 1
 --exec $MYSQL --host=localhost --ssl --tls_version=TLSv1.2 -e "show status like 'ssl_version';"

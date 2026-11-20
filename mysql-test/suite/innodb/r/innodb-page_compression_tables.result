@@ -14,13 +14,13 @@ Table	Create Table
 innodb_compact	CREATE TABLE `innodb_compact` (
   `c1` bigint(20) NOT NULL,
   `b` char(200) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci ROW_FORMAT=COMPACT `page_compressed`=1
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci ROW_FORMAT=COMPACT `page_compressed`='1'
 show create table innodb_dynamic;
 Table	Create Table
 innodb_dynamic	CREATE TABLE `innodb_dynamic` (
   `c1` bigint(20) NOT NULL,
   `b` char(200) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci ROW_FORMAT=DYNAMIC `page_compressed`=1
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci ROW_FORMAT=DYNAMIC `page_compressed`='1'
 create table innodb_redundant(c1 bigint not null, b char(200)) engine=innodb row_format=redundant page_compressed=1;
 ERROR HY000: Can't create table `test`.`innodb_redundant` (errno: 140 "Wrong create options")
 show warnings;
@@ -53,7 +53,7 @@ Table	Create Table
 innodb_redundant	CREATE TABLE `innodb_redundant` (
   `c1` bigint(20) NOT NULL,
   `b` char(200) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci ROW_FORMAT=COMPACT `page_compressed`=1
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci ROW_FORMAT=COMPACT `page_compressed`='1'
 drop table innodb_redundant;
 create procedure innodb_insert_proc (repeat_count int)
 begin
@@ -140,7 +140,7 @@ Table	Create Table
 explicit_no_compression	CREATE TABLE `explicit_no_compression` (
   `id` int(11) NOT NULL,
   `name` varchar(200) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci `PAGE_COMPRESSED`=0
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci `PAGE_COMPRESSED`='0'
 DROP TABLE no_compression;
 DROP TABLE default_compression;
 DROP TABLE explicit_no_compression;

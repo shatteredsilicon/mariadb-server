@@ -277,6 +277,15 @@ do_rename(THD *thd, TABLE_LIST *ren_table, const LEX_CSTRING *new_db,
   }
   DBUG_ASSERT(new_alias.str);
 
+  /*
+    SQLCOM_ALTER_DB_UPGRADE is a special case, it moves tables
+    from the #mysql50#db to db (from old name to new name)
+    and old db might have tables with #mysql50# prefix.
+  */
+  if (thd->lex->sql_command != SQLCOM_ALTER_DB_UPGRADE &&
+      error_if_mysql50_prefix(new_alias.str, ER_WRONG_TABLE_NAME))
+    DBUG_RETURN(1);
+
   if (ha_table_exists(thd, new_db, &new_alias))
   {
     my_error(ER_TABLE_EXISTS_ERROR, MYF(0), new_alias.str);

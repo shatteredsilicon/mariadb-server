@@ -2,6 +2,17 @@
 # with support for SSL.
 
 -- source include/have_ssl_communication.inc
+
+# Pre-TLS1.2 negotiation is removed by OpenSSL 3.x-era distro builds (EL9/EL10,
+# Debian/Ubuntu default policies); the assertions below require TLSv1.0/1.1 to be
+# negotiable — full coverage retained on OpenSSL 1.x hosts (EL7/EL8).
+let $ssl_lib= `SELECT @@version_ssl_library`;
+let $no_legacy_tls= `SELECT '$ssl_lib' LIKE 'OpenSSL%' AND LEFT(SUBSTRING_INDEX(SUBSTRING_INDEX('$ssl_lib',' ',2),' ',-1),1) + 0 >= 3`;
+if ($no_legacy_tls)
+{
+  skip Needs TLSv1.0/1.1 support; disabled by the SSL library;
+}
+
 #default is highest available version: TLSv1.2
 --exec $MYSQL --host=localhost --ssl -e "show status like 'ssl_version';"
 # TLSv1.2

@@ -324,7 +324,7 @@ int Geometry::as_wkt(String *wkt, const char **end)
   if (get_data_as_wkt(wkt, end))
     return 1;
   if (get_class_info() != &geometrycollection_class)
-    wkt->qs_append(')');
+    wkt->append(')'); // NOT qs_append, get_data_as_wkt consumed reserved space
   return 0;
 }
 
@@ -2632,8 +2632,7 @@ bool Gis_multi_line_string::get_mbr(MBR *mbr, const char **end) const
 
   while (n_line_strings--)
   {
-    data+= WKB_HEADER_SIZE;
-    if (!(data= get_mbr_for_points(mbr, data, 0)))
+    if (!(data= get_mbr_for_points(mbr, data + WKB_HEADER_SIZE, 0)))
       return 1;
   }
   *end= data;
@@ -2693,6 +2692,8 @@ int Gis_multi_line_string::geom_length(double *len, const char **end) const
   {
     double ls_len;
     Gis_line_string ls;
+    if (no_data(data, WKB_HEADER_SIZE))
+      return 1;
     data+= WKB_HEADER_SIZE;
     ls.set_data_ptr(data, (uint32) (m_data_end - data));
     if (ls.geom_length(&ls_len, &line_end))
@@ -3136,6 +3137,8 @@ int Gis_multi_polygon::area(double *ar,  const char **end_of_data) const
     double p_area;
     Gis_polygon p;
 
+    if (no_data(data, WKB_HEADER_SIZE))
+      return 1;
     data+= WKB_HEADER_SIZE;
     p.set_data_ptr(data, (uint32) (m_data_end - data));
     if (p.area(&p_area, &data))
@@ -3163,6 +3166,8 @@ int Gis_multi_polygon::centroid(String *result) const
 
   while (n_polygons--)
   {
+    if (no_data(data, WKB_HEADER_SIZE))
+      return 1;
     data+= WKB_HEADER_SIZE;
     p.set_data_ptr(data, (uint32) (m_data_end - data));
     if (p.area(&cur_area, &data) ||
@@ -3452,7 +3457,7 @@ bool Gis_geometry_collection::get_data_as_wkt(String *txt,
     goto exit;
   }
 
-  txt->qs_append('(');
+  txt->append('(');
   while (n_objects--)
   {
     uint32 wkb_type;
@@ -3470,7 +3475,7 @@ bool Gis_geometry_collection::get_data_as_wkt(String *txt,
     if (n_objects && txt->append(STRING_WITH_LEN(","), 512))
       return 1;
   }
-  txt->qs_append(')');
+  txt->append(')');
 exit:
   *end= data;
   return 0;
