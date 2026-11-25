@@ -3103,19 +3103,26 @@ static bool send_show_master_info_data(THD *thd, Master_info *mi, bool full,
     if (full)
       protocol->store(mi->connection_name.str, mi->connection_name.length,
                       &my_charset_bin);
+    /* MDEV-40298: read the SQL thread's proc info under rli.run_lock (the
+       correct lock for sql_driver_thd), then the IO thread's under run_lock. */
+    mysql_mutex_lock(&mi->rli.run_lock);
+    const char *slave_sql_running_state=
+      mi->rli.sql_driver_thd ? mi->rli.sql_driver_thd->get_proc_info() : "";
+    DEBUG_SYNC(thd, "hold_sss_with_run_lock");
+    mysql_mutex_unlock(&mi->rli.run_lock);
     mysql_mutex_lock(&mi->run_lock);
+    const char *slave_io_running_state=
+      mi->io_thd ? mi->io_thd->get_proc_info() : "";
+    mysql_mutex_unlock(&mi->run_lock);
     if (full)
     {
       /*
         Show what the sql driver replication thread is doing
         This is only meaningful if there is only one slave thread.
       */
-      protocol->store(mi->rli.sql_driver_thd ?
-                      mi->rli.sql_driver_thd->get_proc_info() : "",
-                      &my_charset_bin);
+      protocol->store(slave_sql_running_state, &my_charset_bin);
     }
-    protocol->store(mi->io_thd ? mi->io_thd->get_proc_info() : "", &my_charset_bin);
-    mysql_mutex_unlock(&mi->run_lock);
+    protocol->store(slave_io_running_state, &my_charset_bin);
 
     mysql_mutex_lock(&mi->data_lock);
     mysql_mutex_lock(&mi->rli.data_lock);
@@ -3282,10 +3289,7 @@ static bool send_show_master_info_data(THD *thd, Master_info *mi, bool full,
 
     protocol->store((uint32) mi->rli.get_sql_delay());
     // SQL_Remaining_Delay
-    // THD::proc_info is not protected by any lock, so we read it once
-    // to ensure that we use the same value throughout this function.
-    const char *slave_sql_running_state=
-      mi->rli.sql_driver_thd ? mi->rli.sql_driver_thd->proc_info : "";
+    // slave_sql_running_state was already read under rli.run_lock above.
     if (slave_sql_running_state == Relay_log_info::state_delaying_string)
     {
       time_t t= my_time(0), sql_delay_end= mi->rli.get_sql_delay_end();

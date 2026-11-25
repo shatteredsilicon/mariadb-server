@@ -62,7 +62,7 @@ foo	CREATE TABLE `foo` (
   PRIMARY KEY (`e`),
   UNIQUE KEY `c` (`c`),
   KEY `d` (`d`),
-  KEY `b` (`b`) `clustering`=yes
+  KEY `b` (`b`) `clustering`='yes'
 ) ENGINE=TokuDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci
 alter table foo change column aa aa int NOT NULL;
 ERROR 42000: Table 'foo' uses an extension that doesn't exist in this XYZ version

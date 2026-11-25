@@ -2962,3 +2962,16 @@ set sql_mode=default;
 --disable_query_log
 --eval SET GLOBAL max_connections = $saved_max_connections
 --enable_query_log
+--echo #
+--echo # \0 in a query
+--echo #
+select hex("1 2");
+
+--echo # End of 10.6 tests
+
+# Wait till we reached the initial number of concurrent sessions
+--source include/wait_until_count_sessions.inc
+
+--disable_query_log
+--eval SET GLOBAL max_connections = $saved_max_connections
+--enable_query_log
